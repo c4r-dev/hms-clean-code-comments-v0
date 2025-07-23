@@ -626,7 +626,7 @@ const PythonCodeViewer = ({ code, onFunctionSelect }) => {
               Function Selected: {selectedFunction.name}()
             </Typography>
             <Typography variant="body2" sx={{ mb: 3, color: '#6b7280', textAlign: 'center' }}>
-              You've selected a complete function! Would you like to work on adding documentation to this function?
+              You&apos;ve selected a complete function! Would you like to work on adding documentation to this function?
             </Typography>
             <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
               <Button 
@@ -1183,7 +1183,7 @@ Utility functions for basic preprocessing of microscopy data.
         <StyledCard>
           <CardContent sx={{ py: 3 }}>
             <Typography variant="body2" color="text.primary" sx={{ lineHeight: 1.6 }}>
-              To begin, let's add a multi-line comment at the start of the function describing its 
+              To begin, let&apos;s add a multi-line comment at the start of the function describing its 
               what it does, what its inputs are, and what outputs the user should expect. This 
               kind of comment is called a docstring, and makes it much easier to understand a 
               function at a glance.
@@ -1216,7 +1216,7 @@ Utility functions for basic preprocessing of microscopy data.
                 color: '#ce9178',
                 ml: 2
               }}>
-                """
+              &quot;&quot;&quot;
               </Typography>
             </Box>
 
@@ -1288,7 +1288,7 @@ Utility functions for basic preprocessing of microscopy data.
                 color: '#ce9178',
                 ml: 2
               }}>
-                """
+               &quot;&quot;&quot;
               </Typography>
             </Box>
 
@@ -1465,7 +1465,7 @@ Utility functions for basic preprocessing of microscopy data.
             <StyledCard sx={{ mt: 3 }}>
               <CardContent sx={{ py: 3 }}>
                 <Typography variant="body2" color="text.primary" sx={{ lineHeight: 1.6 }}>
-                  Next, let's place in-line comments. Your in-line comments should be placed ahead 
+                  Next, let&apos;s place in-line comments. Your in-line comments should be placed ahead 
                   of any code that branches off of the current undertaking and clarify what is 
                   happening between now and the next comment. In our function below, select all 
                   the places in which you think a comment should be placed.
@@ -1496,7 +1496,7 @@ Utility functions for basic preprocessing of microscopy data.
                     color: '#ce9178',
                     ml: 2
                   }}>
-                    """
+                    &quot;&quot;&quot;
                   </Typography>
                 </Box>
 
@@ -1525,7 +1525,7 @@ Utility functions for basic preprocessing of microscopy data.
                     color: '#ce9178',
                     ml: 2
                   }}>
-                    """
+                    &quot;&quot;&quot;
                   </Typography>
                 </Box>
 
@@ -1837,7 +1837,7 @@ Utility functions for basic preprocessing of microscopy data.
                       color: '#ce9178',
                       ml: 2
                     }}>
-                      """
+                      &quot;&quot;&quot;
                     </Typography>
                   </Box>
 
@@ -1864,7 +1864,7 @@ Utility functions for basic preprocessing of microscopy data.
                       color: '#ce9178',
                       ml: 2
                     }}>
-                      """
+                      &quot;&quot;&quot;
                     </Typography>
                   </Box>
 
@@ -2686,7 +2686,7 @@ def smooth_image(image, factor):
                     <strong>{item.fileName}</strong> - {item.functionName}() [Lines {item.startLine}-{item.endLine}]
                   </Typography>
                   <Typography variant="body2" sx={{ fontSize: '0.75rem', fontStyle: 'italic', mt: 0.5 }}>
-                    "{item.docstring.substring(0, 100)}{item.docstring.length > 100 ? '...' : ''}"
+                    &quot;{item.docstring.substring(0, 100)}{item.docstring.length > 100 ? '...' : ''}&quot;
                   </Typography>
                 </Box>
               ))}
@@ -3135,7 +3135,7 @@ Data Sources:
                 Though the project below is sufficiently organized for prospective users to know 
                 where they should expect to find different files, the script themselves still expect 
                 users to possess a lot of knowledge and understanding that they may lack. This 
-                can even be true if that user is a future version of you that hasn't looked at this 
+                can even be true if that user is a future version of you that hasn&apos;t looked at this 
                 code in many months!
               </Typography>
               <Typography variant="body2" color="text.primary">
@@ -3234,7 +3234,7 @@ Data Sources:
             <Typography variant="body2" color="text.primary" sx={{ mb: 2, lineHeight: 1.6 }}>
               This script currently requires users to read and understand every single line of 
               code in order to get a sense for what is happening. We can improve on this step-by-step. 
-              First, let's take a look at the functions, click one to work on it.
+              First, let&apos;s take a look at the functions, click one to work on it.
             </Typography>
           </CardContent>
         </StyledCard>
