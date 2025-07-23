@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { flushSync } from 'react-dom';
 import {
   Box,
   Typography,
@@ -65,6 +66,8 @@ const CodeContainer = styled(Box)(({ theme }) => ({
   padding: theme.spacing(2),
   maxHeight: '500px',
   overflowY: 'auto',
+  whiteSpace: 'pre',
+  tabSize: 4,
   '& .hljs': {
     background: 'transparent',
     color: '#d4d4d4'
@@ -74,6 +77,58 @@ const CodeContainer = styled(Box)(({ theme }) => ({
   },
   '& .hljs-string': {
     color: '#ce9178'
+  },
+  '& .hljs-doctag': {
+    color: '#ce9178',
+    fontStyle: 'italic'
+  },
+  '& .hljs-meta': {
+    color: '#ce9178'
+  },
+  // Ensure all docstring content has consistent color
+  '& .hljs-string.hljs-doctag': {
+    color: '#ce9178 !important',
+    fontStyle: 'italic'
+  },
+  '& .hljs-section': {
+    color: '#ce9178'
+  },
+  // Force consistent docstring coloring - override any sub-highlighting within docstrings
+  '& .hljs-string *': {
+    color: 'inherit !important'
+  },
+  '& .hljs-string .hljs-keyword': {
+    color: '#ce9178 !important'
+  },
+  '& .hljs-string .hljs-built_in': {
+    color: '#ce9178 !important'
+  },
+  // Target all possible docstring-related classes
+  '& .hljs-doctag, & .hljs-string': {
+    color: '#ce9178 !important',
+    fontStyle: 'italic'
+  },
+  '& .hljs-string span': {
+    color: '#ce9178 !important'
+  },
+  // Ensure any nested elements in strings are also orange
+  '& .hljs-string .hljs-title': {
+    color: '#ce9178 !important'
+  },
+  '& .hljs-string .hljs-variable': {
+    color: '#ce9178 !important'
+  },
+  '& .hljs-string .hljs-type': {
+    color: '#ce9178 !important'
+  },
+  // Catch any unclassified content in docstrings that defaults to white
+  '& span:not([class*="hljs-"]):not(.line-number)': {
+    color: '#d4d4d4'
+  },
+  // Aggressive override for any content that might be appearing as white in docstrings
+  '& .hljs-string, & .hljs-string *, & [class*="hljs-string"]': {
+    color: '#ce9178 !important',
+    fontStyle: 'italic'
   },
   '& .hljs-comment': {
     color: '#6a9955',
@@ -118,7 +173,10 @@ const LineNumber = styled('span')({
   minWidth: '32px',
   display: 'inline-block',
   textAlign: 'right',
-  fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace"
+  fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+  fontSize: '14px',
+  lineHeight: 1.5,
+  flexShrink: 0
 });
 
 const StyledTabs = styled(Tabs)(({ theme }) => ({
@@ -519,7 +577,7 @@ const PythonCodeViewer = ({ code, onFunctionSelect }) => {
       <CodeContainer>
         <div onMouseUp={handleTextSelection}>
           {codeLines.map((line, index) => (
-            <div key={index} style={{ display: 'flex', minHeight: '21px' }}>
+            <div key={index} style={{ display: 'flex', minHeight: '21px', alignItems: 'flex-start' }}>
               <LineNumber>{String(index + 1).padStart(2, '0')}</LineNumber>
               <div 
                 style={{ 
@@ -527,10 +585,12 @@ const PythonCodeViewer = ({ code, onFunctionSelect }) => {
                   fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
                   fontSize: '14px',
                   lineHeight: 1.5,
-                  userSelect: 'text'
+                  userSelect: 'text',
+                  whiteSpace: 'pre',
+                  overflow: 'visible'
                 }}
                 dangerouslySetInnerHTML={{ 
-                  __html: highlightedCode ? line : line.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                  __html: highlightedCode ? line : line.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/ /g, '&nbsp;')
                 }}
               />
             </div>
@@ -566,7 +626,7 @@ const PythonCodeViewer = ({ code, onFunctionSelect }) => {
               Function Selected: {selectedFunction.name}()
             </Typography>
             <Typography variant="body2" sx={{ mb: 3, color: '#6b7280', textAlign: 'center' }}>
-              You&apos;ve selected a complete function! Would you like to work on adding documentation to this function?
+              You've selected a complete function! Would you like to work on adding documentation to this function?
             </Typography>
             <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
               <Button 
@@ -710,9 +770,240 @@ const FileContentView = ({ file, onFunctionSelect }) => {
   );
 };
 
-const DocumentationScreen = ({ selectedFunction, onBackToScript }) => {
+const ExampleSolutionViewer = ({ code }) => {
+  const [highlightedCode, setHighlightedCode] = useState('');
+
+  useEffect(() => {
+    const loadHighlightJS = async () => {
+      if (typeof window !== 'undefined' && window.hljs) {
+        try {
+          const result = window.hljs.highlight(code, { language: 'python' });
+          let processedCode = result.value;
+          
+          // Post-process to ensure docstring consistency
+          // Find all content between triple quotes and wrap it in hljs-string class
+          processedCode = processedCode.replace(
+            /(<span class="hljs-string">"""[\s\S]*?"""<\/span>)/g,
+            (match) => {
+              // Remove any nested highlighting within the docstring
+              const cleanContent = match.replace(/<span class="hljs-[^"]*">/g, '').replace(/<\/span>/g, '');
+              return `<span class="hljs-string">${cleanContent.replace(/<span class="hljs-string">|<\/span>/g, '')}</span>`;
+            }
+          );
+          
+          setHighlightedCode(processedCode);
+        } catch (error) {
+          console.error('Highlighting error:', error);
+          setHighlightedCode('');
+        }
+      }
+    };
+    loadHighlightJS();
+  }, [code]);
+
+  const codeLines = highlightedCode ? highlightedCode.split('\n') : code.split('\n');
+
+  return (
+    <>
+      {codeLines.map((line, index) => (
+        <Box key={`example-${index}`} sx={{ display: 'flex', minHeight: '21px', alignItems: 'flex-start', px: 2 }}>
+          <LineNumber>{String(index + 1).padStart(2, '0')}</LineNumber>
+          <div 
+            style={{ 
+              flex: 1, 
+              fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+              fontSize: '14px',
+              lineHeight: 1.5,
+              whiteSpace: 'pre',
+              overflow: 'visible'
+            }}
+            dangerouslySetInnerHTML={{ 
+              __html: highlightedCode ? line : line.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/ /g, '&nbsp;')
+            }}
+          />
+        </Box>
+      ))}
+    </>
+  );
+};
+
+const DocumentationScreen = ({ selectedFunction, selectedFile, onBackToScript }) => {
   const [docstring, setDocstring] = useState('');
   const [isEditing, setIsEditing] = useState(true);
+  const [showValidation, setShowValidation] = useState(false);
+  const [showInlineComments, setShowInlineComments] = useState(false);
+  const [showComparison, setShowComparison] = useState(false);
+  const [comparisonTab, setComparisonTab] = useState(0);
+  const [showHelp, setShowHelp] = useState(false);
+  const [currentTemplate, setCurrentTemplate] = useState(0);
+  const [validationAnswers, setValidationAnswers] = useState({
+    describes: '',
+    inputs: '',
+    outputs: '',
+    example: ''
+  });
+  const [savedDocstrings, setSavedDocstrings] = useState([]);
+  const [hasClickedContinue, setHasClickedContinue] = useState(false);
+  const [hasEditedDocstring, setHasEditedDocstring] = useState(false);
+  const [selectedCommentLines, setSelectedCommentLines] = useState(new Set());
+  const [inlineComments, setInlineComments] = useState(new Map());
+  const [hoveredCommentLine, setHoveredCommentLine] = useState(null);
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+  const [isTooltipHovered, setIsTooltipHovered] = useState(false);
+  const hideTooltipTimeoutRef = useRef(null);
+  const [presentLineContent, setPresentLineContent] = useState('');
+  const [loading, setLoading] = useState({
+    "docstring": `"""
+loading.py
+
+Format-specific image loading helpers plus a simple parameter lookup for
+subsequent preprocessing decisions.  No external documentation tooling
+assumed; plain docstrings only.
+
+Supported formats
+-----------------
+* .nd2 – Nikon Elements files
+* .tiff/.tif – multipage or OME‑TIFF stacks
+* .nwb – NeurodataWithoutBorders containers
+"""`,
+    "from nd2reader import ND2Reader": [
+      "Module docstring explaining format-specific image loading helpers and supported formats",
+      "Module docstring explaining format-specific image loading helpers and supported formats"
+    ],
+    "raw_data = ND2Reader(file_path)": [
+      "# Get image",
+      "# Extract raw file data"
+    ],
+    "microscopy_volume = np.transpose(raw_data, (1, 2, 0))": [
+      "# Rearrange image from (z, x, y) --> (x, y, z)",
+      "# Arrange image dimensions as (x, y, z)"
+    ],
+    "io_obj = NWBHDF5IO(file_path, mode=\"r\")": [
+      "# Load file.",
+      "# Create a reader object."
+    ],
+    "nwb_file = io_obj.read()": [
+      "# Read file.",
+      "# Open the file reader."
+    ],
+    "image_data = nwb_file.acquisition['NeuroPALImageRaw'].data[:]": [
+      "# Get image & rgb channels.",
+      "# Extract the raw image data & the indices of the channels corresponding to the red, green, and blue colors."
+    ],
+    "io_obj.close()": [
+      "# Close file.",
+      "# Close the file reader since we now have all the data we need."
+    ],
+    "rotated_image = np.transpose(image_data, (1, 0, 2, 3))": [
+      "# Rearrange image (z, x, y, c) --> (x, y, z, c).",
+      "# Transpose the image to ensure that it is in (x, y, z, c) order."
+    ],
+    "microscopy_volume = rotated_image[:, :, :, rgb_channel_indices]": [
+      "# Get just rgb channels.",
+      "# Isolate the image to just RGB colors."
+    ],
+    "image_dtype = microscopy_volume.dtype": [
+      "# Convert image to 8bit.",
+      "# Map image onto 8-bit range (0-255)"
+    ]
+  });
+  const [plotting, setPlotting] = useState({
+    "docstring": `"""
+plotting.py
+
+Minimal plotting utilities for visualising intermediate and final processing results.
+"""`,
+    "import matplotlib.pyplot as plt": [
+      "Module docstring explaining minimal plotting utilities for visualising intermediate and final processing results",
+      "Module docstring explaining minimal plotting utilities for visualising intermediate and final processing results"
+    ],
+    "fig, axes = plt.subplots(1, num_images, figsize=(4 * num_images, 3))": [
+      "# One row, N columns – scale width linearly with number of images.",
+      "# Define subplot grid according to number of images."
+    ],
+    "current_axes = 0": [
+      "# Initialize index of axes whose image is being plotted.",
+      "# Initialize zero variable."
+    ],
+    "for label, image in generated_images.items():": [
+      "# Iterate through the (label, image) pairs and plot each one.",
+      "# Plot images one by one."
+    ]
+  });
+  const [preprocessing, setPreprocessing] = useState({
+    "docstring": `"""
+preprocessing.py
+
+Utility functions for basic preprocessing of microscopy data.
+"""`,
+    "import numpy as np": [
+      "Module docstring explaining utility functions for basic preprocessing of microscopy data",
+      "Module docstring explaining utility functions for basic preprocessing of microscopy data"
+    ],
+    "dimensions = np.array(image.shape)": [
+      "# Convert shape tuple to a numpy array so we can use numeric operations.",
+      "# Get image shape"
+    ],
+    "z_index = np.argmin(dimensions)": [
+      "# For data without a color channel dimension, take the smallest dimension.",
+      "# Get smallest dimension index"
+    ],
+    "z_index = np.argpartition(dimensions, 1)[1]": [
+      "# For data with a color channel dimension, choose the second smallest dimension.  This heuristic avoids picking the channel or time axis when those happen to match the slice count.",
+      "# Get second smallest dimension index"
+    ],
+    "maximum_intensity_projection = np.max(image, axis=z_index)": [
+      "# Collapse the chosen axis by taking the maximum value.",
+      "# Calculate the maximum intensity projection by setting (x, y) pixel equal to the highest value in the set of values that coordinate has across all z-slices."
+    ],
+    "bottom_capped_image = image - lowest_pixel_value": [
+      "# Shift so the minimum becomes zero, then scale by the range.",
+      "# Normalize image"
+    ],
+    "bg = np.percentile(image, background_percentile)": [
+      "# Estimate background threshold.",
+      "# Get background threshold corresponding to the given percentile value"
+    ],
+    "row_indices = np.where(non_bg.any(axis=1))[0]": [
+      "# Coordinates where foreground is present along each axis.",
+      "# Find appropriate places column & row to cut"
+    ],
+    "row_slice = slice(row_indices[0], row_indices[-1] + 1)": [
+      "# Slice to the first / last foreground rows and columns.",
+      "# Create image indices"
+    ],
+    "image = image[row_slice, col_slice]": [
+      "# Index the image around the target region.",
+      "# Crop image"
+    ]
+  });
+
+  // Add CSS for placeholder styling
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      .comment-input::placeholder {
+        color: #be185d !important;
+        opacity: 0.8;
+      }
+    `;
+    document.head.appendChild(style);
+    return () => document.head.removeChild(style);
+  }, []);
+
+  // Debug: Log when showValidation changes and scroll to questions
+  useEffect(() => {
+    console.log('showValidation state changed to:', showValidation);
+    if (showValidation) {
+      // Scroll to validation questions after they appear
+      setTimeout(() => {
+        const validationSection = document.querySelector('[data-validation-section]');
+        if (validationSection) {
+          validationSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 100);
+    }
+  }, [showValidation]);
 
   // Parse function to get signature and body
   const parseFunctionStructure = (functionCode) => {
@@ -734,6 +1025,9 @@ const DocumentationScreen = ({ selectedFunction, onBackToScript }) => {
 
   const handleDocstringChange = (event) => {
     setDocstring(event.target.value);
+    if (event.target.value.trim() && !hasEditedDocstring) {
+      setHasEditedDocstring(true);
+    }
   };
 
   const handleDocstringBlur = () => {
@@ -744,28 +1038,161 @@ const DocumentationScreen = ({ selectedFunction, onBackToScript }) => {
     setIsEditing(true);
   };
 
+  const templates = [
+    {
+      content: `def {function_name}({inputs}):
+    """
+    {FUNCTION_NAME}: {function description}
+    
+    Inputs:
+    - {input_1}: {description of input_1}
+    - {input_2}: {description of input_2}
+    
+    Outputs:
+    - {output}: {description of output}
+    
+    Example Usage:
+    {example usage}
+    """
+    {function content}
+    return {output}`
+    },
+    {
+      content: `def {function_name}({inputs}):
+    """
+    Brief description of what this function does.
+    
+    Parameters:
+    ----------
+    {input_1} : {type}
+        Description of the first parameter
+    {input_2} : {type}
+        Description of the second parameter
+    
+    Returns:
+    -------
+    {type}
+        Description of the return value
+    """
+    {function content}
+    return {output}`
+    },
+    {
+      content: `def {function_name}({inputs}):
+    """
+    {One line description}
+    
+    Args:
+        {input_1}: {description}
+        {input_2}: {description}
+    
+    Returns:
+        {description of return value}
+    
+    Raises:
+        {ExceptionType}: {description of when this exception is raised}
+    """
+    {function content}
+    return {output}`
+    }
+  ];
+
+  const handleValidationAnswer = (question, answer) => {
+    setValidationAnswers(prev => ({
+      ...prev,
+      [question]: answer
+    }));
+  };
+
+
+  const handleContinueToNextStep = () => {
+    console.log('handleContinueToNextStep called');
+    console.log('docstring:', docstring.trim());
+    console.log('showValidation before:', showValidation);
+    
+    if (docstring.trim()) {
+      console.log('Conditions met, proceeding...');
+      
+      // Save the docstring
+      const docstringData = {
+        fileName: 'main.py',
+        functionName: selectedFunction.name,
+        startLine: selectedFunction.startLine + 1,
+        endLine: selectedFunction.endLine + 1,
+        docstring: docstring.trim(),
+        timestamp: new Date().toISOString()
+      };
+
+      setSavedDocstrings(prev => {
+        const filtered = prev.filter(item => 
+          !(item.fileName === docstringData.fileName && item.functionName === docstringData.functionName)
+        );
+        return [...filtered, docstringData];
+      });
+      
+      console.log('Saved docstring:', docstringData);
+      
+      // Show validation immediately
+      setShowValidation(true);
+      console.log('Validation set to true');
+      
+    } else {
+      console.log('No docstring found');
+    }
+  };
+
+  const handleInsertTemplate = () => {
+    setDocstring(templates[currentTemplate].content);
+    setShowHelp(false);
+    setIsEditing(true);
+  };
+
+  const allQuestionsAnswered = Object.values(validationAnswers).every(answer => answer !== '');
+
+  const validationQuestions = [
+    {
+      key: 'describes',
+      text: 'Does your docstring describe what the function does?'
+    },
+    {
+      key: 'inputs',
+      text: `Does your docstring clearly explain ${selectedFunction.name}'s inputs?`
+    },
+    {
+      key: 'outputs',
+      text: `Does your docstring clearly explain ${selectedFunction.name}'s outputs?`
+    },
+    {
+      key: 'example',
+      text: 'Does your docstring provide an example of how to call this function?'
+    }
+  ];
+
   return (
     <Box sx={{ minHeight: '100vh', backgroundColor: '#f3f4f6', py: 3 }}>
       <Container maxWidth="md">
         <StyledCard>
           <CardContent sx={{ py: 2 }}>
             <Typography variant="h6" color="text.primary" fontWeight={500} textAlign="center">
-              {'{Activity Title}'}
+              {showInlineComments ? 'Screen 5a' : '{Activity Title}'}
             </Typography>
           </CardContent>
         </StyledCard>
 
+        {!showInlineComments && (
         <StyledCard>
           <CardContent sx={{ py: 3 }}>
             <Typography variant="body2" color="text.primary" sx={{ lineHeight: 1.6 }}>
-              To begin, let&apos;s add a multi-line comment at the start of the function describing its 
+              To begin, let's add a multi-line comment at the start of the function describing its 
               what it does, what its inputs are, and what outputs the user should expect. This 
               kind of comment is called a docstring, and makes it much easier to understand a 
               function at a glance.
             </Typography>
           </CardContent>
         </StyledCard>
+        )}
 
+        {!showInlineComments && (
         <Paper sx={{ mb: 3, overflow: 'hidden' }}>
           <CodeContainer sx={{ maxHeight: 'none', padding: 0 }}>
             {/* Function signature line */}
@@ -789,7 +1216,7 @@ const DocumentationScreen = ({ selectedFunction, onBackToScript }) => {
                 color: '#ce9178',
                 ml: 2
               }}>
-              &quot;&quot;&quot;
+                """
               </Typography>
             </Box>
 
@@ -814,6 +1241,7 @@ const DocumentationScreen = ({ selectedFunction, onBackToScript }) => {
                   onFocus={handleDocstringFocus}
                   onBlur={handleDocstringBlur}
                   placeholder="Add your docstring here - describe what the function does, its parameters, and return value..."
+                  disabled={showValidation}
                   style={{
                     width: '100%',
                     minHeight: '60px',
@@ -821,13 +1249,14 @@ const DocumentationScreen = ({ selectedFunction, onBackToScript }) => {
                     fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
                     fontSize: '14px',
                     lineHeight: 1.5,
-                    color: '#d4d4d4',
-                    backgroundColor: isEditing ? 'rgba(100, 116, 139, 0.3)' : 'rgba(100, 116, 139, 0.1)',
-                    border: isEditing ? '2px solid #3b82f6' : '2px solid transparent',
+                    color: showValidation ? '#9ca3af' : '#d4d4d4',
+                    backgroundColor: showValidation ? 'rgba(100, 116, 139, 0.05)' : (isEditing ? 'rgba(100, 116, 139, 0.3)' : 'rgba(100, 116, 139, 0.1)'),
+                    border: showValidation ? '2px solid #e5e7eb' : (isEditing ? '2px solid #3b82f6' : '2px solid transparent'),
                     borderRadius: '6px',
                     outline: 'none',
                     resize: 'vertical',
                     transition: 'all 0.2s ease',
+                    cursor: showValidation ? 'not-allowed' : 'text',
                     '::placeholder': {
                       color: '#9ca3af'
                     }
@@ -859,7 +1288,7 @@ const DocumentationScreen = ({ selectedFunction, onBackToScript }) => {
                 color: '#ce9178',
                 ml: 2
               }}>
-                &quot;&quot;&quot;
+                """
               </Typography>
             </Box>
 
@@ -879,9 +1308,36 @@ const DocumentationScreen = ({ selectedFunction, onBackToScript }) => {
             ))}
           </CodeContainer>
         </Paper>
+        )}
 
-        {/* Docstring guidelines */}
-        {isEditing && (
+        {/* Need Help button - only show before editing docstring and before finishing */}
+        {!hasEditedDocstring && !showValidation && !showInlineComments && (
+          <StyledCard sx={{ mb: 3 }}>
+            <CardContent sx={{ py: 2, textAlign: 'center' }}>
+              <Typography variant="body2" sx={{ mb: 2, color: '#6b7280' }}>
+                Need help writing a docstring? Click below for templates and examples.
+              </Typography>
+              <Button 
+                variant="contained" 
+                onClick={() => setShowHelp(true)}
+                sx={{ 
+                  bgcolor: '#000000', 
+                  color: 'white',
+                  '&:hover': { bgcolor: '#1f2937' },
+                  px: 4,
+                  py: 1.5,
+                  fontSize: '0.875rem',
+                  fontWeight: 500
+                }}
+              >
+                NEED HELP?
+              </Button>
+            </CardContent>
+          </StyledCard>
+        )}
+
+        {/* Docstring guidelines - show when editing */}
+        {isEditing && hasEditedDocstring && !showValidation && !showInlineComments && (
           <StyledCard sx={{ mb: 3 }}>
             <CardContent sx={{ py: 2 }}>
               <Typography variant="body2" color="text.primary" sx={{ mb: 1, fontWeight: 500 }}>
@@ -897,42 +1353,1502 @@ const DocumentationScreen = ({ selectedFunction, onBackToScript }) => {
           </StyledCard>
         )}
 
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-          <Button 
-            variant="contained" 
-            onClick={onBackToScript}
-            sx={{ 
-              bgcolor: '#000000', 
-              color: 'white',
-              '&:hover': { bgcolor: '#1f2937' },
-              px: 4,
-              py: 1.5,
-              fontSize: '0.875rem',
-              fontWeight: 500
+        {!showValidation && !showInlineComments && (
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+            <Button 
+              variant="contained" 
+              onClick={onBackToScript}
+              sx={{ 
+                bgcolor: '#000000', 
+                color: 'white',
+                '&:hover': { bgcolor: '#1f2937' },
+                px: 4,
+                py: 1.5,
+                fontSize: '0.875rem',
+                fontWeight: 500
+              }}
+            >
+              BACK TO SCRIPT
+            </Button>
+            <Button 
+              variant="contained" 
+              disabled={!docstring.trim() || showValidation}
+              onClick={handleContinueToNextStep}
+              sx={{ 
+                bgcolor: (docstring.trim() && !showValidation) ? '#000000' : '#9ca3af',
+                color: 'white',
+                '&:hover': { 
+                  bgcolor: (docstring.trim() && !showValidation) ? '#1f2937' : '#9ca3af' 
+                },
+                px: 4,
+                py: 1.5,
+                fontSize: '0.875rem',
+                fontWeight: 500,
+                flexGrow: 1,
+                maxWidth: '400px',
+                cursor: showValidation ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {showValidation 
+                ? 'STEP COMPLETED' 
+                : (docstring.trim() ? 'CONTINUE TO NEXT STEP' : 'ENTER DOCSTRING TO PROCEED')
+              }
+            </Button>
+          </Box>
+        )}
+
+        {/* Validation Questions Section */}
+        {showValidation && !showInlineComments && (
+          <Box data-validation-section>
+          
+            {validationQuestions.map((question) => (
+              <StyledCard key={question.key} sx={{ mt: 3 }}>
+                <CardContent sx={{ py: 2 }}>
+                  <Typography variant="body1" sx={{ mb: 2, fontWeight: 500, color: '#1f2937' }}>
+                    {question.text}
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    {['YES', "I'M NOT SURE", 'NO'].map((option) => (
+                      <Button
+                        key={option}
+                        variant={validationAnswers[question.key] === option ? 'contained' : 'outlined'}
+                        onClick={() => handleValidationAnswer(question.key, option)}
+                        sx={{
+                          bgcolor: validationAnswers[question.key] === option ? '#000000' : 'transparent',
+                          color: validationAnswers[question.key] === option ? 'white' : '#000000',
+                          borderColor: '#000000',
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          px: 2,
+                          py: 0.5,
+                          '&:hover': {
+                            bgcolor: validationAnswers[question.key] === option ? '#1f2937' : 'rgba(0, 0, 0, 0.04)',
+                            borderColor: '#000000'
+                          }
+                        }}
+                      >
+                        {option}
+                      </Button>
+                    ))}
+                  </Box>
+                </CardContent>
+              </StyledCard>
+            ))}
+
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 3 }}>
+              <Button 
+                variant="contained" 
+                disabled={!allQuestionsAnswered}
+                onClick={() => setShowInlineComments(true)}
+                sx={{ 
+                  bgcolor: allQuestionsAnswered ? '#000000' : '#9ca3af',
+                  color: 'white',
+                  '&:hover': { 
+                    bgcolor: allQuestionsAnswered ? '#1f2937' : '#9ca3af' 
+                  },
+                  px: 4,
+                  py: 1.5,
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                  maxWidth: '400px'
+                }}
+              >
+                {allQuestionsAnswered ? 'CONTINUE TO NEXT STEP' : 'MUST ANSWER ALL QUESTIONS TO PROCEED'}
+              </Button>
+            </Box>
+          </Box>
+        )}
+
+        {/* Inline Comments Section */}
+        {showInlineComments && (
+          <>
+            <StyledCard sx={{ mt: 3 }}>
+              <CardContent sx={{ py: 3 }}>
+                <Typography variant="body2" color="text.primary" sx={{ lineHeight: 1.6 }}>
+                  Next, let's place in-line comments. Your in-line comments should be placed ahead 
+                  of any code that branches off of the current undertaking and clarify what is 
+                  happening between now and the next comment. In our function below, select all 
+                  the places in which you think a comment should be placed.
+                </Typography>
+              </CardContent>
+            </StyledCard>
+
+            <Paper sx={{ mb: 3, overflow: 'hidden' }}>
+              <CodeContainer sx={{ maxHeight: 'none', padding: 0 }}>
+                {/* Function signature line */}
+                <Box sx={{ display: 'flex', minHeight: '21px', alignItems: 'center', px: 2, py: 1 }}>
+                  <LineNumber>01</LineNumber>
+                  <Typography sx={{ 
+                    fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+                    fontSize: '14px',
+                    color: '#d4d4d4'
+                  }}>
+                    {signature}
+                  </Typography>
+                </Box>
+
+                {/* Opening docstring quotes */}
+                <Box sx={{ display: 'flex', minHeight: '21px', alignItems: 'center', px: 2 }}>
+                  <LineNumber>02</LineNumber>
+                  <Typography sx={{ 
+                    fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+                    fontSize: '14px',
+                    color: '#ce9178',
+                    ml: 2
+                  }}>
+                    """
+                  </Typography>
+                </Box>
+
+                {/* Saved docstring content */}
+                {savedDocstrings.length > 0 && savedDocstrings[savedDocstrings.length - 1].docstring.split('\n').map((docLine, docIndex) => (
+                  <Box key={`doc-${docIndex}`} sx={{ display: 'flex', minHeight: '21px', alignItems: 'center', px: 2 }}>
+                    <LineNumber>{String(docIndex + 3).padStart(2, '0')}</LineNumber>
+                    <Typography sx={{ 
+                      fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+                      fontSize: '14px',
+                      color: '#6a9955',
+                      fontStyle: 'italic',
+                      ml: 2
+                    }}>
+                      {docLine}
+                    </Typography>
+                  </Box>
+                ))}
+
+                {/* Closing docstring quotes */}
+                <Box sx={{ display: 'flex', minHeight: '21px', alignItems: 'center', px: 2 }}>
+                  <LineNumber>{String((savedDocstrings.length > 0 ? savedDocstrings[savedDocstrings.length - 1].docstring.split('\n').length : 0) + 3).padStart(2, '0')}</LineNumber>
+                  <Typography sx={{ 
+                    fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+                    fontSize: '14px',
+                    color: '#ce9178',
+                    ml: 2
+                  }}>
+                    """
+                  </Typography>
+                </Box>
+
+                {/* Function body */}
+                {selectedFunction.code.split('\n').slice(1).map((line, index) => {
+                  const docstringLines = savedDocstrings.length > 0 ? savedDocstrings[savedDocstrings.length - 1].docstring.split('\n').length : 0;
+                  const lineNumber = index + docstringLines + 4; // Account for def line, opening """, docstring, closing """
+                  const hasComment = inlineComments.has(lineNumber);
+                  // Allow clicking on any line that has content (not empty)
+                  const isClickableLine = line.trim().length > 0;
+                  
+                  return (
+                    <React.Fragment key={index}>
+                      {/* Editable comment line above if comment exists */}
+                      {hasComment && (
+                        <Box 
+                          sx={{ 
+                            position: 'relative',
+                            display: 'flex', 
+                            minHeight: '21px', 
+                            alignItems: 'center', 
+                            px: 2, 
+                            py: 0.25,
+                            backgroundColor: '#e879f9',
+                            border: '2px solid #c026d3',
+                            borderRadius: '4px',
+                            mx: 1,
+                            my: 0.5
+                          }}
+                          onMouseEnter={(e) => {
+                            console.log('Hovering over comment line:', lineNumber);
+                            // Clear any pending hide timeout
+                            if (hideTooltipTimeoutRef.current) {
+                              clearTimeout(hideTooltipTimeoutRef.current);
+                            }
+                            setHoveredCommentLine(lineNumber);
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const tooltipPos = {
+                              x: rect.left + rect.width / 2,
+                              y: rect.bottom + 10  // Position below the comment line
+                            };
+                            console.log('Setting tooltip position:', tooltipPos);
+                            setTooltipPosition(tooltipPos);
+                          }}
+                          onMouseLeave={() => {
+                            // Don't hide immediately, give time to move to tooltip
+                            hideTooltipTimeoutRef.current = setTimeout(() => {
+                              if (!isTooltipHovered) {
+                                setHoveredCommentLine(null);
+                              }
+                            }, 200); // 200ms delay
+                          }}
+                        >
+                          <LineNumber style={{ color: '#831843' }}>
+                            {String(lineNumber).padStart(2, '0')}
+                          </LineNumber>
+                          <input
+                            type="text"
+                            className="comment-input"
+                            value={inlineComments.get(lineNumber) || ''}
+                            onChange={(e) => {
+                              const newComments = new Map(inlineComments);
+                              newComments.set(lineNumber, e.target.value);
+                              setInlineComments(newComments);
+                            }}
+                            placeholder="# New Comment"
+                            style={{
+                              flex: 1,
+                              backgroundColor: 'transparent',
+                              border: 'none',
+                              outline: 'none',
+                              color: '#831843',
+                              fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+                              fontSize: '14px',
+                              fontWeight: 'bold',
+                              marginLeft: '8px'
+                            }}
+                            onFocus={(e) => {
+                              e.target.style.backgroundColor = 'rgba(190, 24, 93, 0.1)';
+                              setHoveredCommentLine(null);
+                            }}
+                            onBlur={(e) => {
+                              e.target.style.backgroundColor = 'transparent';
+                            }}
+                          />
+                          <button
+                            onClick={() => {
+                              const newComments = new Map(inlineComments);
+                              newComments.delete(lineNumber);
+                              setInlineComments(newComments);
+                              const newSelected = new Set(selectedCommentLines);
+                              newSelected.delete(lineNumber);
+                              setSelectedCommentLines(newSelected);
+                            }}
+                            style={{
+                              backgroundColor: 'transparent',
+                              border: 'none',
+                              color: '#831843',
+                              cursor: 'pointer',
+                              fontSize: '16px',
+                              fontWeight: 'bold',
+                              padding: '2px 6px',
+                              borderRadius: '2px'
+                            }}
+                          >
+                            ×
+                          </button>
+                        </Box>
+                      )}
+                      
+                      {/* Original code line */}
+                      <Box 
+                        sx={{ 
+                          display: 'flex', 
+                          minHeight: '21px', 
+                          alignItems: 'center', 
+                          px: 2, 
+                          py: 0.25,
+                          cursor: isClickableLine ? 'pointer' : 'default',
+                          '&:hover': isClickableLine ? {
+                            backgroundColor: 'rgba(100, 116, 139, 0.1)'
+                          } : {}
+                        }}
+                        onClick={() => {
+                          if (isClickableLine) {
+                            // Capture the content of the clicked line
+                            setPresentLineContent(line.trim());
+                            console.log('Present line content:', line.trim());
+                            
+                            if (hasComment) {
+                              // Remove comment if already exists
+                              const newComments = new Map(inlineComments);
+                              newComments.delete(lineNumber);
+                              setInlineComments(newComments);
+                              const newSelected = new Set(selectedCommentLines);
+                              newSelected.delete(lineNumber);
+                              setSelectedCommentLines(newSelected);
+                            } else {
+                              // Add new comment
+                              const newComments = new Map(inlineComments);
+                              newComments.set(lineNumber, '# New Comment');
+                              setInlineComments(newComments);
+                              const newSelected = new Set(selectedCommentLines);
+                              newSelected.add(lineNumber);
+                              setSelectedCommentLines(newSelected);
+                            }
+                          }
+                        }}
+                      >
+                        <LineNumber>{String(lineNumber).padStart(2, '0')}</LineNumber>
+                        <Typography sx={{ 
+                          fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+                          fontSize: '14px',
+                          color: '#d4d4d4',
+                          whiteSpace: 'pre',
+                          flex: 1
+                        }}>
+                          {line || ''}
+                        </Typography>
+                      </Box>
+                    </React.Fragment>
+                  );
+                })}
+              </CodeContainer>
+            </Paper>
+
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+              <Button 
+                variant="contained" 
+                onClick={onBackToScript}
+                sx={{ 
+                  bgcolor: '#000000', 
+                  color: 'white',
+                  '&:hover': { bgcolor: '#1f2937' },
+                  px: 4,
+                  py: 1.5,
+                  fontSize: '0.875rem',
+                  fontWeight: 500
+                }}
+              >
+                BACK TO SCRIPT
+              </Button>
+              <Button 
+                variant="contained" 
+                disabled={(() => {
+                  // Check if all selected comment lines have actual comments (not just placeholder)
+                  for (let lineNumber of selectedCommentLines) {
+                    const comment = inlineComments.get(lineNumber);
+                    if (!comment || comment === '# New Comment' || comment.trim() === '#' || comment.trim() === '') {
+                      return true; // Disable if any selected line doesn't have a proper comment
+                    }
+                  }
+                  return selectedCommentLines.size < 1; // Also disable if no lines selected
+                })()}
+                onClick={() => {
+                  // Check that all selected lines have proper comments
+                  let allCommentsComplete = true;
+                  for (let lineNumber of selectedCommentLines) {
+                    const comment = inlineComments.get(lineNumber);
+                    if (!comment || comment === '# New Comment' || comment.trim() === '#' || comment.trim() === '') {
+                      allCommentsComplete = false;
+                      break;
+                    }
+                  }
+                  
+                  if (selectedCommentLines.size >= 1 && allCommentsComplete) {
+                    // Save the complete function with comments
+                    console.log('Saving function with inline comments:', inlineComments);
+                    setShowComparison(true);
+                  }
+                }}
+                sx={{ 
+                  bgcolor: (() => {
+                    // Check if all selected comment lines have actual comments
+                    for (let lineNumber of selectedCommentLines) {
+                      const comment = inlineComments.get(lineNumber);
+                      if (!comment || comment === '# New Comment' || comment.trim() === '#' || comment.trim() === '') {
+                        return '#9ca3af'; // Gray if any selected line doesn't have a proper comment
+                      }
+                    }
+                    return selectedCommentLines.size >= 1 ? '#000000' : '#9ca3af';
+                  })(),
+                  color: 'white',
+                  '&:hover': { 
+                    bgcolor: (() => {
+                      // Check if all selected comment lines have actual comments
+                      for (let lineNumber of selectedCommentLines) {
+                        const comment = inlineComments.get(lineNumber);
+                        if (!comment || comment === '# New Comment' || comment.trim() === '#' || comment.trim() === '') {
+                          return '#9ca3af'; // Gray if any selected line doesn't have a proper comment
+                        }
+                      }
+                      return selectedCommentLines.size >= 1 ? '#1f2937' : '#9ca3af';
+                    })()
+                  },
+                  px: 4,
+                  py: 1.5,
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                  flexGrow: 1,
+                  maxWidth: '400px'
+                }}
+              >
+                {(() => {
+                  // Check if all selected comment lines have actual comments
+                  for (let lineNumber of selectedCommentLines) {
+                    const comment = inlineComments.get(lineNumber);
+                    if (!comment || comment === '# New Comment' || comment.trim() === '#' || comment.trim() === '') {
+                      return 'COMPLETE ALL SELECTED COMMENTS TO PROCEED';
+                    }
+                  }
+                  return selectedCommentLines.size >= 1 
+                    ? 'CONTINUE TO NEXT STEP' 
+                    : 'MUST CREATE 1+ COMMENTS TO PROCEED';
+                })()}
+              </Button>
+            </Box>
+          </>
+        )}
+
+        {/* Comparison Screen */}
+        {showComparison && (
+          <>
+            <StyledCard sx={{ mt: 3 }}>
+              <CardContent sx={{ py: 2 }}>
+                <Typography variant="h6" color="text.primary" fontWeight={500} textAlign="center">
+                  Solution Comparison
+                </Typography>
+              </CardContent>
+            </StyledCard>
+
+            <StyledCard>
+              <CardContent sx={{ py: 3 }}>
+                <Typography variant="body2" color="text.primary" sx={{ lineHeight: 1.6 }}>
+                  Compare your solution with an example solution. Your solution shows the function with 
+                  your docstring and inline comments. The example solution shows how an experienced 
+                  developer might document the same function.
+                </Typography>
+              </CardContent>
+            </StyledCard>
+
+            <Paper sx={{ mb: 3, overflow: 'hidden' }}>
+              <StyledTabs value={comparisonTab} onChange={(event, newValue) => setComparisonTab(newValue)}>
+                <Tab label="YOUR SOLUTION" />
+                <Tab label="EXAMPLE SOLUTION" />
+              </StyledTabs>
+              
+              <TabPanel value={comparisonTab} index={0}>
+                <CodeContainer sx={{ maxHeight: 'none', padding: 0 }}>
+                  {/* User's Solution - Function with user's docstring and comments */}
+                  {/* Function signature */}
+                  <Box sx={{ display: 'flex', minHeight: '21px', alignItems: 'center', px: 2, py: 1 }}>
+                    <LineNumber>01</LineNumber>
+                    <Typography sx={{ 
+                      fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+                      fontSize: '14px',
+                      color: '#d4d4d4'
+                    }}>
+                      {signature}
+                    </Typography>
+                  </Box>
+
+                  {/* User's docstring */}
+                  <Box sx={{ display: 'flex', minHeight: '21px', alignItems: 'center', px: 2 }}>
+                    <LineNumber>02</LineNumber>
+                    <Typography sx={{ 
+                      fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+                      fontSize: '14px',
+                      color: '#ce9178',
+                      ml: 2
+                    }}>
+                      """
+                    </Typography>
+                  </Box>
+
+                  {savedDocstrings.length > 0 && savedDocstrings[savedDocstrings.length - 1].docstring.split('\n').map((docLine, docIndex) => (
+                    <Box key={`user-doc-${docIndex}`} sx={{ display: 'flex', minHeight: '21px', alignItems: 'center', px: 2 }}>
+                      <LineNumber>{String(docIndex + 3).padStart(2, '0')}</LineNumber>
+                      <Typography sx={{ 
+                        fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+                        fontSize: '14px',
+                        color: '#6a9955',
+                        fontStyle: 'italic',
+                        ml: 2
+                      }}>
+                        {docLine}
+                      </Typography>
+                    </Box>
+                  ))}
+
+                  <Box sx={{ display: 'flex', minHeight: '21px', alignItems: 'center', px: 2 }}>
+                    <LineNumber>{String((savedDocstrings.length > 0 ? savedDocstrings[savedDocstrings.length - 1].docstring.split('\n').length : 0) + 3).padStart(2, '0')}</LineNumber>
+                    <Typography sx={{ 
+                      fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+                      fontSize: '14px',
+                      color: '#ce9178',
+                      ml: 2
+                    }}>
+                      """
+                    </Typography>
+                  </Box>
+
+                  {/* User's function body with inline comments */}
+                  {selectedFunction.code.split('\n').slice(1).map((line, index) => {
+                    const docstringLines = savedDocstrings.length > 0 ? savedDocstrings[savedDocstrings.length - 1].docstring.split('\n').length : 0;
+                    const lineNumber = index + docstringLines + 4;
+                    const hasComment = inlineComments.has(lineNumber);
+                    
+                    return (
+                      <React.Fragment key={`user-${index}`}>
+                        {/* User's inline comment */}
+                        {hasComment && (
+                          <Box sx={{ 
+                            display: 'flex', 
+                            minHeight: '21px', 
+                            alignItems: 'center', 
+                            px: 2, 
+                            py: 0.25,
+                            backgroundColor: '#e879f9',
+                            border: '2px solid #c026d3',
+                            borderRadius: '4px',
+                            mx: 1,
+                            my: 0.5
+                          }}>
+                            <LineNumber style={{ color: '#831843' }}>
+                              {String(lineNumber).padStart(2, '0')}
+                            </LineNumber>
+                            <Typography sx={{ 
+                              fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+                              fontSize: '14px',
+                              color: '#831843',
+                              fontWeight: 'bold',
+                              ml: 1
+                            }}>
+                              {inlineComments.get(lineNumber)}
+                            </Typography>
+                          </Box>
+                        )}
+                        
+                        {/* Function code line */}
+                        <Box sx={{ display: 'flex', minHeight: '21px', alignItems: 'center', px: 2, py: 0.25 }}>
+                          <LineNumber>{String(lineNumber).padStart(2, '0')}</LineNumber>
+                          <Typography sx={{ 
+                            fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+                            fontSize: '14px',
+                            color: '#d4d4d4',
+                            whiteSpace: 'pre'
+                          }}>
+                            {line}
+                          </Typography>
+                        </Box>
+                      </React.Fragment>
+                    );
+                  })}
+                </CodeContainer>
+              </TabPanel>
+
+              <TabPanel value={comparisonTab} index={1}>
+                <CodeContainer sx={{ maxHeight: 'none', padding: 0 }}>
+                  {/* Example Solution - Well-documented version of the selected function */}
+                  {(() => {
+                    // Create example solution based on the selected function
+                    const getExampleSolution = (functionName, originalCode) => {
+                      // Check if we need to add a module docstring based on selectedFile
+                      let moduleDocstring = '';
+                      if (selectedFile === 'plotting' && plotting.docstring) {
+                        moduleDocstring = plotting.docstring + '\n';
+                      } else if (selectedFile === 'preprocessing' && preprocessing.docstring) {
+                        moduleDocstring = preprocessing.docstring + '\n';
+                      } else if (selectedFile === 'loading' && loading.docstring) {
+                        moduleDocstring = loading.docstring + '\n';
+                      }
+                      
+                      if (functionName === 'load_file') {
+                        return moduleDocstring + `def load_file(path):
+    """
+    Load microscopy data from various file formats and return preprocessing parameters.
+    
+    This function supports loading from .nd2, .tiff/.tif, and .nwb file formats.
+    It automatically detects the file format based on the file extension and
+    loads the appropriate preprocessing parameters for that format.
+    
+    Parameters:
+    -----------
+    path : str
+        File path to the microscopy data file
+        
+    Returns:
+    --------
+    tuple
+        microscopy_data : ndarray
+            The loaded microscopy image data
+        image_parameters : dict
+            Dictionary containing preprocessing parameters including:
+            - is_normalized : bool
+            - is_mip : bool  
+            - is_cropped : bool
+            - downsampling_factor : tuple
+            - smooth_factor : float
+            
+    Raises:
+    -------
+    ValueError
+        If the file format is not supported
+        
+    Example:
+    --------
+    >>> data, params = load_file("data/sample.nd2")
+    >>> print(params['is_normalized'])
+    False
+    """
+    # Check file extension to determine format
+    if path.endswith('.nd2'):
+        # Load ND2 format microscopy data
+        microscopy_data = loading.load_nd2(path)
+        is_normalized, is_mip, is_cropped, zoom_level, gaussian_sigma = loading.load_parameters(file_format='nd2')
+
+    elif path.endswith('.tiff') or path.endswith('.tif'):
+        # Load TIFF format microscopy data  
+        microscopy_data = loading.load_tif(path)
+        is_normalized, is_mip, is_cropped, zoom_level, gaussian_sigma = loading.load_parameters(file_format='tiff')
+
+    elif path.endswith('.nwb'):
+        # Load NWB format microscopy data
+        microscopy_data = loading.load_nwb(path)
+        is_normalized, is_mip, is_cropped, zoom_level, gaussian_sigma = loading.load_parameters(file_format='nwb')
+
+    else:
+        # Unsupported file format - raise error
+        raise ValueError(f"Unsupported file format: {path}")
+
+    # Create parameters dictionary with all preprocessing settings
+    image_parameters = {
+        'is_normalized': is_normalized,
+        'is_mip': is_mip,
+        'is_cropped': is_cropped,
+        'downsampling_factor': zoom_level,
+        'smooth_factor': gaussian_sigma
+    }
+
+    # Return both data and parameters
+    return microscopy_data, image_parameters`;
+                      } else if (functionName === 'load_tif') {
+                        return moduleDocstring + `from nd2reader import ND2Reader
+from tifffile import imread
+from pynwb import NWBHDF5IO
+import numpy as np
+
+
+def load_tif(file_path):
+    """Return image/stack data from a TIFF/OME-TIFF file generated by the fiji image processing data.
+
+    Parameters
+    ----------
+    file_path : str
+        Path to a .tif or .tiff file.
+
+    Returns
+    -------
+    numpy.ndarray
+        Image array as loaded by \`\`tifffile.imread\`\` (dtype preserved).
+    """
+
+    microscopy_volume = imread(file_path)
+    return microscopy_volume`;
+                      } else if (functionName === 'load_nd2') {
+                        return moduleDocstring + `from nd2reader import ND2Reader
+from tifffile import imread
+from pynwb import NWBHDF5IO
+import numpy as np
+
+
+def load_nd2(file_path):
+    """Return image/stack data from a Nikon ND2 file.
+
+    Notes
+    -----
+    \`\`ND2Reader\`\` yields data typically in (z, x, y) or (channel, x, y, z)
+    orders depending on acquisition. This code assumes the incoming
+    sequence yields 2D frames and transposes to (x, y, z).
+
+    Parameters
+    ----------
+    file_path : str
+        Path to a .nd2 file.
+
+    Returns
+    -------
+    numpy.ndarray
+        Transposed image stack with frames along the last axis.
+    """
+
+    # Extract raw file data
+    raw_data = ND2Reader(file_path)
+
+    # Arrange image dimensions as (x, y, z)
+    microscopy_volume = np.transpose(raw_data, (1, 2, 0))
+
+    return microscopy_volume`;
+                      } else if (functionName === 'load_nwb') {
+                        return moduleDocstring + `from nd2reader import ND2Reader
+from tifffile import imread
+from pynwb import NWBHDF5IO
+import numpy as np
+
+
+def load_nwb(file_path):
+    """Return image/stack data from an NWB file.
+
+    Assumptions
+    -----------
+    * The acquisition contains a key 'NeuroPALImageRaw'.
+    * Data layout is (z, x, y, channels) or similar; we transpose to (x, y, z, channels)
+      only as needed to match downstream expectations (here: (x, y, z, channels) after
+      transposition and channel selection).
+    * RGBW_channels stores indices where the first three are RGB.
+
+    Steps
+    -----
+    1. Open file read-only.
+    2. Read full dataset into memory (adjust if too large for real use).
+    3. Transpose to put spatial axes first for consistency.
+    4. Select only the RGB channels.
+    5. Convert to 8-bit range 0–255 (without changing dtype explicitly here).
+    6. Close file handle.
+
+    Parameters
+    ----------
+    file_path : str
+        Path to a .nwb file.
+
+    Returns
+    -------
+    numpy.ndarray
+        Image data scaled to 0–255 float range.
+    """
+
+    # Create a reader object.
+    io_obj = NWBHDF5IO(file_path, mode="r")
+
+    # Open the file reader.
+    nwb_file = io_obj.read()
+
+    # Extract the raw image data & the indices of the channels corresponding to the red, green, and blue colors.
+    image_data = nwb_file.acquisition['NeuroPALImageRaw'].data[:]
+    rgb_channel_indices = nwb_file.acquisition['NeuroPALImageRaw'].RGBW_channels[:3]
+
+    # Close the file reader since we now have all the data we need.
+    io_obj.close()
+
+    # Transpose the image to ensure that it is in (x, y, z, c) order.
+    rotated_image = np.transpose(image_data, (1, 0, 2, 3))
+
+    # Isolate the image to just RGB colors.
+    microscopy_volume = rotated_image[:, :, :, rgb_channel_indices]
+
+    # Map image onto 8-bit range (0-255)
+    image_dtype = microscopy_volume.dtype
+    maximum_integer_value = np.iinfo(image_dtype).max
+    microscopy_volume = (microscopy_volume/maximum_integer_value) * 255
+
+    return microscopy_volume`;
+                      } else if (functionName === 'load_parameters') {
+                        return moduleDocstring + `from nd2reader import ND2Reader
+from tifffile import imread
+from pynwb import NWBHDF5IO
+import numpy as np
+
+
+def load_parameters(file_format):
+    """Return preprocessing parameter flags for a given file format.
+
+    The values indicate which preprocessing steps are already satisfied
+    (normalization, projection, cropping) and numeric factors for
+    downsampling and smoothing.
+
+    Parameters
+    ----------
+    file_format : str
+        One of 'nd2', 'tif', 'tiff', 'nwb'.
+
+    Returns
+    -------
+    is_normalized : bool
+        True if this format features pre-normalized images, false otherwise.
+    is_mip: bool
+        True if this format features maximum intensity projections, false otherwise.
+    is_cropped: bool
+        True if this format features pre-cropped images, false otherwise.
+    zoom_level: tuple
+        A tuple whose every element describes factor by which its corresponding dimension should be downsampled. For
+        example, to downsample the first dimensions of a given format's image by half and the second by a third, you
+        would set zoom_level to (0.5, 0.3).
+    gaussian_sigma: tuple
+        The standard deviation passed to the gaussian filter that will be applied to images loaded in this format. The
+        higher the value, the more the image will be blurred.
+    """
+
+    match file_format:
+        case 'nd2':
+            is_normalized = False
+            is_mip = False
+            is_cropped = False
+            zoom_level = (1, 1)
+            gaussian_sigma = 0
+
+        case 'tif' | 'tiff':
+            is_normalized = False
+            is_mip = True
+            is_cropped = False
+            zoom_level = (0.35, 0.35, 1)
+            gaussian_sigma = 0.3
+
+        case 'nwb':
+            is_normalized = False
+            is_mip = False
+            is_cropped = True
+            zoom_level = (1, 0.75, 1)
+            gaussian_sigma = 0
+
+        case _:
+            raise ValueError("Unknown file format!")
+
+    return is_normalized, is_mip, is_cropped, zoom_level, gaussian_sigma`;
+                      } else if (functionName === 'generate_comparison_plot') {
+                        return moduleDocstring + `import matplotlib.pyplot as plt
+
+
+def generate_comparison_plot(generated_images, output_path):
+    """Save a horizontal figure showing each intermediate processing step.
+
+    Parameters
+    ----------
+    generated_images : dict[str, np.ndarray]
+        An *ordered* mapping from step label to image.  The labels become
+        subplot titles in the order the items appear in the dict.
+    output_path : str
+        File path where the PNG figure will be written.
+    """
+    num_images = len(generated_images)
+
+    # One row, N columns – scale width linearly with number of images.
+    fig, axes = plt.subplots(1, num_images, figsize=(4 * num_images, 3))
+
+    # Initialize index of axes whose image is being plotted.
+    current_axes = 0
+
+    # Iterate through the (label, image) pairs and plot each one.
+    for label, image in generated_images.items():
+        axes[current_axes].imshow(image)
+        axes[current_axes].set_title(label)
+        current_axes += 1
+
+    plt.savefig(output_path)`;
+                      } else if (functionName === 'plot_single_file') {
+                        return moduleDocstring + `import matplotlib.pyplot as plt
+
+
+def plot_single_file(image):
+    """Display a single image (no file is saved).
+
+    Parameters
+    ----------
+    image : np.ndarray
+        Image to display.
+    """
+
+    plt.imshow(image)`;
+                      } else if (functionName === 'plot_multiple_files') {
+                        return moduleDocstring + `import matplotlib.pyplot as plt
+
+
+def plot_multiple_files(filenames, images, output_path=None):
+    """Show (and optionally save) a row of final images, one per file.
+
+    Parameters
+    ----------
+    filenames : list[str]
+        Names used for subplot titles.
+    images : list[np.ndarray]
+        Images to display, same order/length as \`\`filenames\`\`.
+    output_path : str | None
+        If provided, the figure is saved to this path; otherwise only shown.
+    """
+
+    num_images = len(images)
+    fig, axes = plt.subplots(1, num_images, figsize=(4 * num_images, 3))
+
+    for i in range(num_images):
+        filename = filenames[i]
+        image = images[i]
+
+        axes[i].imshow(image)
+        axes[i].set_title(filename)
+
+    if output_path is not None:
+        plt.savefig(output_path)
+
+    plt.show()`;
+                      } else if (functionName === 'maximally_project_image') {
+                        return moduleDocstring + `import numpy as np
+from scipy.ndimage import zoom, gaussian_filter
+
+def maximally_project_image(image):
+    """Return a maximum intensity projection of a given image.
+    
+    A maximum intensity projection (MIP) is a visualization method that projects
+    the maximum value from a 3D or 4D image volume onto a 2D plane along a 
+    specified axis. This is particularly useful for microscopy data where you
+    want to visualize the brightest features across depth.
+    
+    The function intelligently determines which axis to project along based on
+    the image dimensions. For images without a color channel (3D), it chooses
+    the smallest dimension. For images with a color channel (4D), it chooses
+    the second smallest dimension to preserve color information.
+    
+    Parameters:
+    -----------
+    image : numpy.ndarray
+        Input image data. Can be 3D (height, width, depth) or 4D 
+        (height, width, depth, channels). The function will automatically
+        determine the appropriate axis for projection.
+        
+    Returns:
+    --------
+    numpy.ndarray
+        2D or 3D maximum intensity projection of the input image.
+        For 3D input: returns 2D projection
+        For 4D input: returns 3D projection (preserving color channels)
+        
+    Example:
+    --------
+    >>> import numpy as np
+    >>> # Create a sample 3D image
+    >>> image_3d = np.random.rand(100, 100, 20)
+    >>> mip = maximally_project_image(image_3d)
+    >>> print(mip.shape)  # Should be (100, 100) or similar
+    
+    >>> # Create a sample 4D image with color channels
+    >>> image_4d = np.random.rand(100, 100, 20, 3)
+    >>> mip_color = maximally_project_image(image_4d)
+    >>> print(mip_color.shape)  # Should be (100, 100, 3) or similar
+    """
+    # Convert shape tuple to a numpy array so we can use numeric operations.
+    dimensions = np.array(image.shape)
+    
+    if len(dimensions) < 4:
+        # For data without a color channel dimension, take the smallest dimension.
+        z_index = np.argmin(dimensions)
+    else:
+        # For data with a color channel dimension, choose the second smallest dimension.
+        z_index = np.argpartition(dimensions, 1)[1]
+    
+    # Collapse the chosen axis by taking the maximum value.
+    maximum_intensity_projection = np.max(image, axis=z_index)
+    
+    return maximum_intensity_projection`;
+                      } else if (functionName === 'normalize_image') {
+                        return moduleDocstring + `import numpy as np
+
+def normalize_image(image):
+    """Scale *image* so its pixel values lie between 0 and 1.
+
+    This uses simple min‑max normalisation: subtract the global minimum
+    and divide by the full range.  Floating‑point output is returned.
+
+    Parameters
+    ----------
+    image : np.ndarray
+        Input image of any dimensionality.
+
+    Returns
+    -------
+    np.ndarray
+        Normalised image with the same shape as the input.
+    """
+
+    lowest_pixel_value = np.min(image)
+    highest_pixel_value = np.max(image)
+    pixel_value_range = highest_pixel_value - lowest_pixel_value
+
+    # Shift so the minimum becomes zero, then scale by the range.
+    bottom_capped_image = image - lowest_pixel_value
+    normalized_image = bottom_capped_image / pixel_value_range
+
+    return normalized_image`;
+                      } else if (functionName === 'crop_background_border') {
+                        return moduleDocstring + `import numpy as np
+
+def crop_background_border(image, background_percentile):
+    """Crop away uniform background borders.
+
+    Any pixel value at or below the given background_percentile is
+    considered background.  The function finds the smallest rectangle
+    (row and column bounds) that contains at least one foreground pixel
+    and returns the cropped image.
+
+    Parameters
+    ----------
+    image : np.ndarray
+        2‑D image (height × width) or higher‑dimensional data where the
+        background is uniform across the first two axes.
+    background_percentile : int or float
+        Percentile used to define the background threshold, e.g. 98.
+
+    Returns
+    -------
+    np.ndarray
+        Cropped image.
+    """
+
+    # Estimate background threshold.
+    bg = np.percentile(image, background_percentile)
+    non_bg = image > bg  # Boolean mask of foreground pixels.
+
+    # Coordinates where foreground is present along each axis.
+    row_indices = np.where(non_bg.any(axis=1))[0]
+    col_indices = np.where(non_bg.any(axis=0))[0]
+
+    # Slice to the first / last foreground rows and columns.
+    row_slice = slice(row_indices[0], row_indices[-1] + 1)
+    col_slice = slice(col_indices[0], col_indices[-1] + 1)
+
+    # Index the image around the target region.
+    image = image[row_slice, col_slice]
+
+    return image`;
+                      } else if (functionName === 'downsample_image') {
+                        return moduleDocstring + `import numpy as np
+from scipy.ndimage import zoom
+
+def downsample_image(image, factor):
+    """Resize a given image by  a given factor using cubic spline interpolation.
+
+    Parameters
+    ----------
+    image : np.ndarray
+        Image array of arbitrary dimensionality.
+    factor : float or sequence of floats
+        Zoom factor(s) passed directly to \`\`scipy.ndimage.zoom\`\`.  Values
+        greater than 1 enlarge the image, values less than 1 shrink it.
+
+    Returns
+    -------
+    np.ndarray
+        Resampled image.
+    """
+
+    image = zoom(image, factor)
+
+    return image`;
+                      } else if (functionName === 'smooth_image') {
+                        return moduleDocstring + `import numpy as np
+from scipy.ndimage import gaussian_filter
+
+def smooth_image(image, factor):
+    """Blur a given image with a Gaussian kernel.
+
+    Parameters
+    ----------
+    image : np.ndarray
+        Input image.
+    factor : float or sequence of floats
+        Standard deviation(s) of the Gaussian kernel, in pixels.
+
+    Returns
+    -------
+    np.ndarray
+        Smoothed image.
+    """
+
+    image = gaussian_filter(image, sigma=factor)
+
+    return image`;
+                      } else {
+                        // For any other function, create a well-documented version of the original code
+                        const lines = originalCode.split('\n');
+                        const functionLine = lines[0];
+                        const bodyLines = lines.slice(1);
+                        
+                        // Extract function name for documentation
+                        const funcName = functionLine.match(/def\s+(\w+)/)?.[1] || 'function';
+                        
+                        // Create comprehensive docstring
+                        const docstring = `    """
+    ${funcName.charAt(0).toUpperCase() + funcName.slice(1).replace(/_/g, ' ')} function with comprehensive documentation.
+    
+    This function performs the operations defined in the original implementation
+    with added documentation and inline comments for better code understanding.
+    
+    Parameters:
+    -----------
+    (parameters based on function signature)
+        
+    Returns:
+    --------
+    (return value description)
+        
+    Example:
+    --------
+    >>> result = ${funcName}()
+    >>> print(result)
+    """`;
+                        
+                        // Add inline comments to body lines
+                        const documentedBodyLines = bodyLines.map(line => {
+                          if (line.trim() === '') return line;
+                          if (line.trim().startsWith('#')) return line;
+                          
+                          // Add helpful inline comments based on code patterns
+                          if (line.includes('if ') && line.includes(':')) {
+                            return line + '  # Conditional logic check';
+                          } else if (line.includes('for ') && line.includes(':')) {
+                            return line + '  # Iterate through collection';
+                          } else if (line.includes('return ')) {
+                            return line + '  # Return result to caller';
+                          } else if (line.includes('=') && !line.includes('==')) {
+                            return line + '  # Variable assignment';
+                          } else if (line.includes('(') && line.includes(')')) {
+                            return line + '  # Function call';
+                          } else {
+                            return line + '  # Process operation';
+                          }
+                        });
+                        
+                        return moduleDocstring + functionLine + '\n' + docstring + '\n' + documentedBodyLines.join('\n');
+                      }
+                    };
+                    
+                    return <ExampleSolutionViewer code={getExampleSolution(selectedFunction.name, selectedFunction.code)} />;
+                  })()}
+                </CodeContainer>
+              </TabPanel>
+            </Paper>
+
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+              <Button 
+                variant="contained" 
+                onClick={onBackToScript}
+                sx={{ 
+                  bgcolor: '#000000', 
+                  color: 'white',
+                  '&:hover': { bgcolor: '#1f2937' },
+                  px: 4,
+                  py: 1.5,
+                  fontSize: '0.875rem',
+                  fontWeight: 500
+                }}
+              >
+                BACK TO SCRIPT
+              </Button>
+              <Button 
+                variant="contained" 
+                onClick={() => {
+                  // Reset all states to go back to the first screen
+                  setShowValidation(false);
+                  setShowInlineComments(false);
+                  setShowComparison(false);
+                  setDocstring('');
+                  setInlineComments(new Map());
+                  setSelectedCommentLines(new Set());
+                  setCurrentTemplate(0);
+                  setIsEditing(true);
+                  setHasClickedContinue(false);
+                  setHasEditedDocstring(false);
+                  setComparisonTab(0);
+                  setPresentLineContent('');
+                  setValidationAnswers({
+                    describes: '',
+                    inputs: '',
+                    outputs: '',
+                    example: ''
+                  });
+                  // Call the parent function to go back to script
+                  onBackToScript();
+                }}
+                sx={{ 
+                  bgcolor: '#000000',
+                  color: 'white',
+                  '&:hover': { bgcolor: '#1f2937' },
+                  px: 4,
+                  py: 1.5,
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                  flexGrow: 1,
+                  maxWidth: '400px'
+                }}
+              >
+                FINISH ACTIVITY
+              </Button>
+            </Box>
+          </>
+        )}
+
+        {/* Help Modal */}
+        {showHelp && (
+          <Box sx={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999
+          }}>
+            <Paper sx={{ 
+              p: 4, 
+              maxWidth: 800, 
+              maxHeight: '90vh',
+              mx: 2,
+              borderRadius: 2,
+              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.3)',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column'
+            }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                  Need Help? Functionality
+                </Typography>
+                <IconButton onClick={() => setShowHelp(false)}>
+                  <CloseIcon />
+                </IconButton>
+              </Box>
+              
+              <Box sx={{ 
+                backgroundColor: '#fff3cd', 
+                color: '#856404',
+                p: 2, 
+                borderRadius: 1, 
+                mb: 3,
+                border: '1px solid #ffeaa7'
+              }}>
+                <Typography variant="body1" sx={{ fontWeight: 500, mb: 1 }}>
+                  Here are some common docstring templates.
+                </Typography>
+              </Box>
+
+              <CodeContainer sx={{ 
+                flex: 1, 
+                maxHeight: 'none', 
+                overflow: 'auto',
+                mb: 3,
+                backgroundColor: '#2d3748'
+              }}>
+                {templates[currentTemplate].content.split('\n').map((line, index) => (
+                  <Box key={index} sx={{ display: 'flex', minHeight: '21px', alignItems: 'center', px: 2 }}>
+                    <LineNumber>{String(index + 1).padStart(2, '0')}</LineNumber>
+                    <Typography sx={{ 
+                      fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+                      fontSize: '14px',
+                      color: '#e2e8f0',
+                      whiteSpace: 'pre'
+                    }}>
+                      {line || ''}
+                    </Typography>
+                  </Box>
+                ))}
+              </CodeContainer>
+
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                <Button 
+                  variant="outlined"
+                  onClick={() => setCurrentTemplate((prev) => (prev - 1 + templates.length) % templates.length)}
+                  sx={{ 
+                    borderColor: '#000000',
+                    color: '#000000',
+                    '&:hover': { 
+                      borderColor: '#000000',
+                      backgroundColor: 'rgba(0, 0, 0, 0.04)'
+                    }
+                  }}
+                >
+                  PREVIOUS TEMPLATE
+                </Button>
+                <Button 
+                  variant="contained"
+                  onClick={handleInsertTemplate}
+                  sx={{ 
+                    bgcolor: '#000000',
+                    '&:hover': { bgcolor: '#1f2937' }
+                  }}
+                >
+                  INSERT TEMPLATE INTO DOCSTRING
+                </Button>
+                <Button 
+                  variant="outlined"
+                  onClick={() => setCurrentTemplate((prev) => (prev + 1) % templates.length)}
+                  sx={{ 
+                    borderColor: '#000000',
+                    color: '#000000',
+                    '&:hover': { 
+                      borderColor: '#000000',
+                      backgroundColor: 'rgba(0, 0, 0, 0.04)'
+                    }
+                  }}
+                >
+                  NEXT TEMPLATE
+                </Button>
+              </Box>
+            </Paper>
+          </Box>
+        )}
+
+        {/* Debug: Show saved docstrings */}
+        {savedDocstrings.length > 0 && !showInlineComments && (
+          <StyledCard sx={{ mt: 3, backgroundColor: '#f0f9ff' }}>
+            <CardContent sx={{ py: 2 }}>
+              <Typography variant="body2" color="text.primary" sx={{ mb: 1, fontWeight: 500 }}>
+                💾 Saved Docstrings:
+              </Typography>
+              {savedDocstrings.map((item, index) => (
+                <Box key={index} sx={{ mb: 1, p: 1, backgroundColor: 'rgba(0,0,0,0.05)', borderRadius: 1 }}>
+                  <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
+                    <strong>{item.fileName}</strong> - {item.functionName}() [Lines {item.startLine}-{item.endLine}]
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontSize: '0.75rem', fontStyle: 'italic', mt: 0.5 }}>
+                    "{item.docstring.substring(0, 100)}{item.docstring.length > 100 ? '...' : ''}"
+                  </Typography>
+                </Box>
+              ))}
+            </CardContent>
+          </StyledCard>
+        )}
+        
+    {/* Interactive comment selection tooltip */}
+      {/* Interactive comment selection tooltip */}
+        {hoveredCommentLine && (
+          console.log('Rendering tooltip for line:', hoveredCommentLine, 'at position:', tooltipPosition),
+          <Box
+            data-tooltip-menu
+            onMouseEnter={() => {
+              // Clear any pending hide timeout
+              if (hideTooltipTimeoutRef.current) {
+                clearTimeout(hideTooltipTimeoutRef.current);
+              }
+              setIsTooltipHovered(true);
             }}
-          >
-            BACK TO SCRIPT
-          </Button>
-          <Button 
-            variant="contained" 
-            disabled={!docstring.trim()}
-            sx={{ 
-              bgcolor: docstring.trim() ? '#000000' : '#9ca3af',
+            onMouseLeave={() => {
+              setIsTooltipHovered(false);
+              // Hide tooltip after a longer delay
+              hideTooltipTimeoutRef.current = setTimeout(() => {
+                setHoveredCommentLine(null);
+              }, 300);
+            }}
+            sx={{
+              position: 'fixed',
+              left: Math.max(10, Math.min(tooltipPosition.x, window.innerWidth - 340)),
+              top: Math.max(10, tooltipPosition.y),
+              transform: 'translateX(-50%)',
+              backgroundColor: '#e879f9',
               color: 'white',
-              '&:hover': { 
-                bgcolor: docstring.trim() ? '#1f2937' : '#9ca3af' 
+              padding: '12px 0px',
+              borderRadius: '8px',
+              fontSize: '14px',
+              fontWeight: 600,
+              whiteSpace: 'normal',
+              lineHeight: 1.4,
+              width: '320px',
+              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3)',
+              border: '3px solid #c026d3',
+              zIndex: 10000,
+              pointerEvents: 'auto',
+              marginTop: '8px',
+              fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                bottom: '100%',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                width: 0,
+                height: 0,
+                borderLeft: '6px solid transparent',
+                borderRight: '6px solid transparent',
+                borderBottom: '6px solid #c026d3'
               },
-              px: 4,
-              py: 1.5,
-              fontSize: '0.875rem',
-              fontWeight: 500,
-              flexGrow: 1,
-              maxWidth: '400px'
+              '&::after': {
+                content: '""',
+                position: 'absolute',
+                bottom: '100%',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                width: 0,
+                height: 0,
+                borderLeft: '5px solid transparent',
+                borderRight: '5px solid transparent',
+                borderBottom: '5px solid #e879f9',
+                marginTop: '1px'
+              }
             }}
           >
-            {docstring.trim() ? 'CONTINUE TO NEXT STEP' : 'MUST ANSWER ALL QUESTIONS TO PROCEED'}
-          </Button>
-        </Box>
+{(() => {
+              // Check if selectedFile matches a state variable and presentLineContent matches a key
+              const useLoadingOptions = selectedFile === 'loading' && loading[presentLineContent];
+              const usePlottingOptions = selectedFile === 'plotting' && plotting[presentLineContent];
+              const usePreprocessingOptions = selectedFile === 'preprocessing' && preprocessing[presentLineContent];
+              
+              let commentOptions;
+              if (useLoadingOptions) {
+                commentOptions = loading[presentLineContent];
+              } else if (usePlottingOptions) {
+                commentOptions = plotting[presentLineContent];
+              } else if (usePreprocessingOptions) {
+                commentOptions = preprocessing[presentLineContent];
+              } else {
+                commentOptions = ['# Initialize preprocessing_parameters dictionary.', '# Define variable.'];
+              }
+              
+              return commentOptions.map((option, index) => (
+                <Box
+                  key={index}
+                  sx={{
+                    padding: '12px 16px',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    '&:hover': {
+                      backgroundColor: 'rgba(255, 255, 255, 0.3)',
+                      transform: 'scale(1.05)'
+                    },
+                    borderBottom: '2px solid rgba(255, 255, 255, 0.3)',
+                    fontSize: '13px',
+                    fontWeight: 700
+                  }}
+                  onClick={() => {
+                    // Clear timeout and close tooltip
+                    if (hideTooltipTimeoutRef.current) {
+                      clearTimeout(hideTooltipTimeoutRef.current);
+                    }
+                    const newComments = new Map(inlineComments);
+                    newComments.set(hoveredCommentLine, option);
+                    setInlineComments(newComments);
+                    const newSelected = new Set(selectedCommentLines);
+                    newSelected.add(hoveredCommentLine);
+                    setSelectedCommentLines(newSelected);
+                    setHoveredCommentLine(null);
+                    setIsTooltipHovered(false);
+                  }}
+                >
+                  {option}
+                </Box>
+              ));
+            })()}
+            <Box
+              sx={{
+                padding: '8px 12px',
+                cursor: 'pointer',
+                transition: 'background-color 0.2s ease',
+                '&:hover': {
+                  backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                  transform: 'scale(1.02)'
+                }
+              }}
+              onClick={() => {
+                // Clear timeout and close tooltip
+                if (hideTooltipTimeoutRef.current) {
+                  clearTimeout(hideTooltipTimeoutRef.current);
+                }
+                const newComments = new Map(inlineComments);
+                newComments.set(hoveredCommentLine, '# ');
+                setInlineComments(newComments);
+                const newSelected = new Set(selectedCommentLines);
+                newSelected.add(hoveredCommentLine);
+                setSelectedCommentLines(newSelected);
+                setHoveredCommentLine(null);
+                setIsTooltipHovered(false);
+                // Focus the input after a brief delay
+                setTimeout(() => {
+                  const input = document.querySelector(`input[value="# "]`);
+                  if (input) {
+                    input.focus();
+                    input.setSelectionRange(2, 2); // Position cursor after "# "
+                  }
+                }, 50);
+              }}
+            >
+              EDIT UR OWN COMMENT
+            </Box>
+          </Box>
+        )}
       </Container>
     </Box>
   );
@@ -957,6 +2873,7 @@ export default function ActivityDashboard() {
   const [currentTab, setCurrentTab] = useState(0);
   const [documentationMode, setDocumentationMode] = useState(false);
   const [selectedFunction, setSelectedFunction] = useState(null);
+  const [selectedFile, setSelectedFile] = useState('');
   const [openFiles, setOpenFiles] = useState([
     { id: 'directory', name: 'PROJECT DIRECTORY', type: 'directory' },
     { id: 'main.py', name: 'MAIN.PY', type: 'python', content: pythonCode }
@@ -988,6 +2905,10 @@ export default function ActivityDashboard() {
   };
 
   const handleFileClick = (fileName, fileType) => {
+    // Set selected file name without .py extension
+    const fileNameWithoutExtension = fileName.replace(/\.py$/, '');
+    setSelectedFile(fileNameWithoutExtension);
+    
     const existingIndex = openFiles.findIndex(file => file.id === fileName);
     
     if (existingIndex !== -1) {
@@ -1083,55 +3004,49 @@ def load_parameters(file_format):
     return is_normalized, is_mip, is_cropped, zoom_level, gaussian_sigma`,
       
       'plotting.py': `import matplotlib.pyplot as plt
-import numpy as np
 
-def plot_processing_comparison(unprocessed_data, processed_data, file_name, path):
-    fig, axes = plt.subplots(1, 2, figsize=(15, 7.5))
+
+def generate_comparison_plot(generated_images, output_path):
+    # Updated plotting functions
+   
+    num_images = len(generated_images)
+
+ 
+    fig, axes = plt.subplots(1, num_images, figsize=(4 * num_images, 3))
+
     
-    axes[0].imshow(unprocessed_data, cmap='gray')
-    axes[0].set_title(f'{file_name}: Unprocessed', fontsize=14)
-    axes[0].axis('off')
-    
-    axes[1].imshow(processed_data, cmap='gray')
-    axes[1].set_title(f'{file_name}: Processed', fontsize=14)
-    axes[1].axis('off')
-    
-    plt.tight_layout()
-    plt.savefig(path, dpi=300, bbox_inches='tight')
-    plt.close()
-    
-def plot_overview(unprocessed_volume_1, processed_volume_1,
-                  unprocessed_volume_2, processed_volume_2,
-                  unprocessed_volume_3, processed_volume_3, path):
-    fig, axes = plt.subplots(2, 3, figsize=(18, 12))
-    
-    axes[0, 0].imshow(unprocessed_volume_1, cmap='gray')
-    axes[0, 0].set_title('20191010_tail_01.nd2: Unprocessed', fontsize=12)
-    axes[0, 0].axis('off')
-    
-    axes[1, 0].imshow(processed_volume_1, cmap='gray')
-    axes[1, 0].set_title('20191010_tail_01.nd2: Processed', fontsize=12)
-    axes[1, 0].axis('off')
-    
-    axes[0, 1].imshow(unprocessed_volume_2, cmap='gray')
-    axes[0, 1].set_title('sub-11-YAaLR_oophys.nwb: Unprocessed', fontsize=12)
-    axes[0, 1].axis('off')
-    
-    axes[1, 1].imshow(processed_volume_2, cmap='gray')
-    axes[1, 1].set_title('sub-11-YAaLR_oophys.nwb: Processed', fontsize=12)
-    axes[1, 1].axis('off')
-    
-    axes[0, 2].imshow(unprocessed_volume_3, cmap='gray')
-    axes[0, 2].set_title('20240523_Vang-1_37.tif: Unprocessed', fontsize=12)
-    axes[0, 2].axis('off')
-    
-    axes[1, 2].imshow(processed_volume_3, cmap='gray')
-    axes[1, 2].set_title('20240523_Vang-1_37.tif: Processed', fontsize=12)
-    axes[1, 2].axis('off')
-    
-    plt.tight_layout()
-    plt.savefig(path, dpi=300, bbox_inches='tight')
-    plt.close()`,
+    current_axes = 0
+
+  
+    for label, image in generated_images.items():
+        axes[current_axes].imshow(image)
+        axes[current_axes].set_title(label)
+        current_axes += 1
+
+    plt.savefig(output_path)
+
+
+def plot_single_file(image):
+ 
+    plt.imshow(image)
+
+
+def plot_multiple_files(filenames, images, output_path=None):
+
+    num_images = len(images)
+    fig, axes = plt.subplots(1, num_images, figsize=(4 * num_images, 3))
+
+    for i in range(num_images):
+        filename = filenames[i]
+        image = images[i]
+
+        axes[i].imshow(image)
+        axes[i].set_title(filename)
+
+    if output_path is not None:
+        plt.savefig(output_path)
+
+    plt.show()`,
         
       'preprocessing.py': `import numpy as np
 from scipy.ndimage import zoom, gaussian_filter
@@ -1199,7 +3114,7 @@ Data Sources:
   };
 
   if (documentationMode && selectedFunction) {
-    return <DocumentationScreen selectedFunction={selectedFunction} onBackToScript={handleBackToScript} />;
+    return <DocumentationScreen selectedFunction={selectedFunction} selectedFile={selectedFile} onBackToScript={handleBackToScript} />;
   }
 
   if (!activityStarted) {
@@ -1220,7 +3135,7 @@ Data Sources:
                 Though the project below is sufficiently organized for prospective users to know 
                 where they should expect to find different files, the script themselves still expect 
                 users to possess a lot of knowledge and understanding that they may lack. This 
-                can even be true if that user is a future version of you that hasn&apos;t looked at this 
+                can even be true if that user is a future version of you that hasn't looked at this 
                 code in many months!
               </Typography>
               <Typography variant="body2" color="text.primary">
@@ -1319,7 +3234,7 @@ Data Sources:
             <Typography variant="body2" color="text.primary" sx={{ mb: 2, lineHeight: 1.6 }}>
               This script currently requires users to read and understand every single line of 
               code in order to get a sense for what is happening. We can improve on this step-by-step. 
-              First, let&apos;s take a look at the functions, click one to work on it.
+              First, let's take a look at the functions, click one to work on it.
             </Typography>
           </CardContent>
         </StyledCard>
