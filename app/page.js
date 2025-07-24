@@ -450,7 +450,7 @@ const FileItem = ({ name, fileType, isHighlighted, isMain, level = 1, onFileClic
   </TreeItem>
 );
 
-const DirectoryView = ({ onFileClick, openFiles }) => (
+const DirectoryView = ({ onFileClick }) => (
   <DirectoryContent>
     <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, pb: 1, borderBottom: '1px solid #4b5563' }}>
       <Typography variant="body2" sx={{ fontWeight: 500, color: '#d1d5db', flex: 1 }}>
@@ -462,26 +462,26 @@ const DirectoryView = ({ onFileClick, openFiles }) => (
     </Box>
 
     <FolderItem name="src" fileCount="3">
-      <FileItem name="loading.py" fileType="python" isHighlighted={openFiles.some(file => file.id === 'loading.py')} onFileClick={onFileClick} />
-      <FileItem name="plotting.py" fileType="python" isHighlighted={openFiles.some(file => file.id === 'plotting.py')} onFileClick={onFileClick} />
-      <FileItem name="preprocessing.py" fileType="python" isHighlighted={openFiles.some(file => file.id === 'preprocessing.py')} onFileClick={onFileClick} />
+      <FileItem name="loading.py" fileType="python" onFileClick={onFileClick} />
+      <FileItem name="plotting.py" fileType="python" onFileClick={onFileClick} />
+      <FileItem name="preprocessing.py" fileType="python" onFileClick={onFileClick} />
     </FolderItem>
 
     <FolderItem name="data" fileCount="4">
-      <FileItem name="20191010_tail_01.nd2" fileType="data" isHighlighted={openFiles.some(file => file.id === '20191010_tail_01.nd2')} onFileClick={onFileClick} />
-      <FileItem name="sub-11-YAaLR_oophys.nwb" fileType="data" isHighlighted={openFiles.some(file => file.id === 'sub-11-YAaLR_oophys.nwb')} onFileClick={onFileClick} />
-      <FileItem name="20240523_Vang-1_37.tif" fileType="image" isHighlighted={openFiles.some(file => file.id === '20240523_Vang-1_37.tif')} onFileClick={onFileClick} />
-      <FileItem name="citations.txt" fileType="text" isHighlighted={openFiles.some(file => file.id === 'citations.txt')} onFileClick={onFileClick} />
+      <FileItem name="20191010_tail_01.nd2" fileType="data" onFileClick={onFileClick} />
+      <FileItem name="sub-11-YAaLR_oophys.nwb" fileType="data" onFileClick={onFileClick} />
+      <FileItem name="20240523_Vang-1_37.tif" fileType="image" onFileClick={onFileClick} />
+      <FileItem name="citations.txt" fileType="text" onFileClick={onFileClick} />
     </FolderItem>
 
     <FolderItem name="results" fileCount="4">
-      <FileItem name="20240523_Vang-1_37_comparison.png" fileType="image" isHighlighted={openFiles.some(file => file.id === '20240523_Vang-1_37_comparison.png')} onFileClick={onFileClick} />
-      <FileItem name="20191010_tail_01_comparison.png" fileType="image" isHighlighted={openFiles.some(file => file.id === '20191010_tail_01_comparison.png')} onFileClick={onFileClick} />
-      <FileItem name="sub-11-YAaLR_oophys_comparison.png" fileType="image" isHighlighted={openFiles.some(file => file.id === 'sub-11-YAaLR_oophys_comparison.png')} onFileClick={onFileClick} />
-      <FileItem name="overview.png" fileType="image" isHighlighted={openFiles.some(file => file.id === 'overview.png')} onFileClick={onFileClick} />
+      <FileItem name="20240523_Vang-1_37_comparison.png" fileType="image" onFileClick={onFileClick} />
+      <FileItem name="20191010_tail_01_comparison.png" fileType="image" onFileClick={onFileClick} />
+      <FileItem name="sub-11-YAaLR_oophys_comparison.png" fileType="image" onFileClick={onFileClick} />
+      <FileItem name="overview.png" fileType="image" onFileClick={onFileClick} />
     </FolderItem>
 
-    <FileItem name="main.py" fileType="python" isMain isHighlighted={openFiles.some(file => file.id === 'main.py')} level={0} onFileClick={onFileClick} />
+    <FileItem name="main.py" fileType="python" isMain level={0} onFileClick={onFileClick} />
   </DirectoryContent>
 );
 
@@ -906,6 +906,7 @@ const DocumentationScreen = ({ selectedFunction, selectedFile, onBackToScript })
   const [docstring, setDocstring] = useState('');
   const [isEditing, setIsEditing] = useState(true);
   const [showValidation, setShowValidation] = useState(false);
+  const [showLineSelection, setShowLineSelection] = useState(false);
   const [showInlineComments, setShowInlineComments] = useState(false);
   const [showComparison, setShowComparison] = useState(false);
   const [comparisonTab, setComparisonTab] = useState(0);
@@ -921,7 +922,9 @@ const DocumentationScreen = ({ selectedFunction, selectedFile, onBackToScript })
   const [hasClickedContinue, setHasClickedContinue] = useState(false);
   const [hasEditedDocstring, setHasEditedDocstring] = useState(false);
   const [selectedCommentLines, setSelectedCommentLines] = useState(new Set());
+  const [selectedLinesForCommenting, setSelectedLinesForCommenting] = useState(new Set());
   const [inlineComments, setInlineComments] = useState(new Map());
+  const [commentLineContent, setCommentLineContent] = useState(new Map()); // Store line content for each comment line
   const [hoveredCommentLine, setHoveredCommentLine] = useState(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   const [isTooltipHovered, setIsTooltipHovered] = useState(false);
@@ -1244,7 +1247,27 @@ Utility functions for basic preprocessing of microscopy data.
     setIsEditing(true);
   };
 
-  const allQuestionsAnswered = Object.values(validationAnswers).every(answer => answer !== '');
+  const handleEditDocstring = () => {
+    // Reset validation state to go back to docstring editing
+    setShowValidation(false);
+    setShowLineSelection(false);
+    setShowInlineComments(false);
+    setIsEditing(true);
+    // Reset all answers to blank for next time
+    setValidationAnswers({
+      describes: '',
+      inputs: '',
+      outputs: '',
+      example: ''
+    });
+    // Clear selected lines
+    setSelectedLinesForCommenting(new Set());
+  };
+
+  const allQuestionsAnswered = Object.values(validationAnswers).every(answer => answer === 'YES' || answer === 'NO');
+  const allAnswersYes = Object.values(validationAnswers).every(answer => answer === 'YES');
+  const hasNoAnswers = Object.values(validationAnswers).some(answer => answer === 'NO');
+  const hasUnansweredQuestions = Object.values(validationAnswers).some(answer => answer === '');
 
   const validationQuestions = [
     {
@@ -1494,66 +1517,444 @@ Utility functions for basic preprocessing of microscopy data.
           </Box>
         )}
 
-        {/* Validation Questions Section */}
+        {/* Validation Questions Section - Tabular Format */}
         {showValidation && !showInlineComments && (
-          <Box data-validation-section>
-          
-            {validationQuestions.map((question) => (
-              <StyledCard key={question.key} sx={{ mt: 3 }}>
-                <CardContent sx={{ py: 2 }}>
-                  <Typography variant="body1" sx={{ mb: 2, fontWeight: 500, color: '#1f2937' }}>
+          <StyledCard sx={{ mt: 3 }}>
+            <CardContent sx={{ py: 3 }}>
+              <Typography variant="h6" sx={{ mb: 3, fontWeight: 600, color: '#1f2937' }}>
+                Please review your docstring:
+              </Typography>
+              
+              {/* Table Header */}
+              <Box sx={{ 
+                display: 'grid', 
+                gridTemplateColumns: '1fr 100px 100px', 
+                gap: 3, 
+                alignItems: 'center',
+                pb: 2,
+                borderBottom: '2px solid #e5e7eb',
+                mb: 2
+              }}>
+                <Typography variant="body1" sx={{ fontWeight: 600, color: '#1f2937' }}>
+                  Question
+                </Typography>
+                <Typography variant="body1" sx={{ fontWeight: 600, color: '#1f2937', textAlign: 'center' }}>
+                  Yes
+                </Typography>
+                <Typography variant="body1" sx={{ fontWeight: 600, color: '#1f2937', textAlign: 'center' }}>
+                  No
+                </Typography>
+              </Box>
+
+              {/* Table Rows */}
+              {validationQuestions.map((question, index) => (
+                <Box key={question.key} sx={{ 
+                  display: 'grid', 
+                  gridTemplateColumns: '1fr 100px 100px', 
+                  gap: 3, 
+                  alignItems: 'center',
+                  py: 2,
+                  borderBottom: index < validationQuestions.length - 1 ? '1px solid #e5e7eb' : 'none'
+                }}>
+                  <Typography variant="body2" sx={{ color: '#374151', lineHeight: 1.5 }}>
                     {question.text}
                   </Typography>
-                  <Box sx={{ display: 'flex', gap: 1 }}>
-                    {['YES', "I'M NOT SURE", 'NO'].map((option) => (
-                      <Button
-                        key={option}
-                        variant={validationAnswers[question.key] === option ? 'contained' : 'outlined'}
-                        onClick={() => handleValidationAnswer(question.key, option)}
-                        sx={{
-                          bgcolor: validationAnswers[question.key] === option ? '#000000' : 'transparent',
-                          color: validationAnswers[question.key] === option ? 'white' : '#000000',
-                          borderColor: '#000000',
-                          fontSize: '0.75rem',
-                          fontWeight: 600,
+                  
+                  {/* Yes Radio Button */}
+                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                    <Box
+                      onClick={() => handleValidationAnswer(question.key, 'YES')}
+                      sx={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: '50%',
+                        border: '2px solid #000000',
+                        backgroundColor: validationAnswers[question.key] === 'YES' ? '#000000' : 'transparent',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        '&:hover': {
+                          backgroundColor: validationAnswers[question.key] === 'YES' ? '#1f2937' : 'rgba(0, 0, 0, 0.05)'
+                        }
+                      }}
+                    >
+                      {validationAnswers[question.key] === 'YES' && (
+                        <Box sx={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: 'white' }} />
+                      )}
+                    </Box>
+                  </Box>
+
+                  {/* No Radio Button */}
+                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                    <Box
+                      onClick={() => handleValidationAnswer(question.key, 'NO')}
+                      sx={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: '50%',
+                        border: '2px solid #000000',
+                        backgroundColor: validationAnswers[question.key] === 'NO' ? '#000000' : 'transparent',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        '&:hover': {
+                          backgroundColor: validationAnswers[question.key] === 'NO' ? '#1f2937' : 'rgba(0, 0, 0, 0.05)'
+                        }
+                      }}
+                    >
+                      {validationAnswers[question.key] === 'NO' && (
+                        <Box sx={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: 'white' }} />
+                      )}
+                    </Box>
+                  </Box>
+                </Box>
+              ))}
+              
+              {/* Info Message for Unanswered Questions */}
+              {hasUnansweredQuestions && !hasNoAnswers && (
+                <Box sx={{ 
+                  mt: 3, 
+                  p: 3, 
+                  backgroundColor: '#f0f9ff', 
+                  borderLeft: '4px solid #3b82f6',
+                  borderRadius: '0 8px 8px 0'
+                }}>
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+                    <Box sx={{ 
+                      fontSize: '1.25rem',
+                      color: '#2563eb',
+                      lineHeight: 1
+                    }}>
+                      📝
+                    </Box>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="body1" sx={{ fontWeight: 600, color: '#1e40af', mb: 1 }}>
+                        Please answer all questions
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: '#1e3a8a', lineHeight: 1.5 }}>
+                        Review each question and select "Yes" or "No" based on your docstring content.
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Box>
+              )}
+
+              {/* Warning Message for No Answers */}
+              {hasNoAnswers && (
+                <Box sx={{ 
+                  mt: 3, 
+                  p: 3, 
+                  backgroundColor: '#fef2f2', 
+                  borderLeft: '4px solid #ef4444',
+                  borderRadius: '0 8px 8px 0'
+                }}>
+                  <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+                    <Box sx={{ 
+                      fontSize: '1.25rem',
+                      color: '#dc2626',
+                      lineHeight: 1
+                    }}>
+                      ⚠️
+                    </Box>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="body1" sx={{ fontWeight: 600, color: '#dc2626', mb: 1 }}>
+                        Docstring needs improvement
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: '#991b1b', lineHeight: 1.5, mb: 2 }}>
+                        You've answered "No" to one or more questions. A good docstring should address all aspects of the function. 
+                        Please edit your docstring to include the missing information.
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: '#7f1d1d', fontSize: '0.875rem', fontStyle: 'italic' }}>
+                        💡 Tip: Use the help templates for guidance on writing comprehensive docstrings.
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Box>
+              )}
+
+              {/* Success Message for All Yes */}
+              {allAnswersYes && !hasUnansweredQuestions && (
+                <Box sx={{ 
+                  mt: 3, 
+                  p: 3, 
+                  backgroundColor: '#f0fdf4', 
+                  borderLeft: '4px solid #22c55e',
+                  borderRadius: '0 8px 8px 0'
+                }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Box sx={{ 
+                      fontSize: '1.25rem',
+                      color: '#16a34a',
+                      lineHeight: 1
+                    }}>
+                      ✅
+                    </Box>
+                    <Typography variant="body1" sx={{ fontWeight: 600, color: '#166534' }}>
+                      Great! Your docstring looks comprehensive.
+                    </Typography>
+                  </Box>
+                </Box>
+              )}
+
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, mt: 4 }}>
+                {/* Edit Docstring Button - shown when there are No answers */}
+                {hasNoAnswers && (
+                  <Button 
+                    variant="outlined"
+                    onClick={handleEditDocstring}
+                    sx={{ 
+                      borderColor: '#dc2626',
+                      color: '#dc2626',
+                      '&:hover': { 
+                        borderColor: '#b91c1c',
+                        backgroundColor: '#fef2f2'
+                      },
+                      px: 4,
+                      py: 1.5,
+                      fontSize: '0.875rem',
+                      fontWeight: 500
+                    }}
+                  >
+                    EDIT DOCSTRING
+                  </Button>
+                )}
+
+                {/* Continue Button - only enabled when all answers are Yes */}
+                <Button 
+                  variant="contained" 
+                  disabled={!allAnswersYes || hasUnansweredQuestions}
+                  onClick={() => setShowLineSelection(true)}
+                  sx={{ 
+                    bgcolor: (allAnswersYes && !hasUnansweredQuestions) ? '#000000' : '#9ca3af',
+                    color: 'white',
+                    '&:hover': { 
+                      bgcolor: (allAnswersYes && !hasUnansweredQuestions) ? '#1f2937' : '#9ca3af' 
+                    },
+                    px: 4,
+                    py: 1.5,
+                    fontSize: '0.875rem',
+                    fontWeight: 500,
+                    marginLeft: hasNoAnswers ? 0 : 'auto'
+                  }}
+                >
+                  {hasUnansweredQuestions 
+                    ? 'PLEASE ANSWER ALL QUESTIONS' 
+                    : allAnswersYes 
+                      ? 'CONTINUE TO NEXT STEP' 
+                      : 'ALL QUESTIONS MUST BE YES TO PROCEED'
+                  }
+                </Button>
+              </Box>
+            </CardContent>
+          </StyledCard>
+        )}
+
+        {/* Line Selection Screen (5a) */}
+        {showLineSelection && !showInlineComments && (
+          <StyledCard sx={{ mt: 3 }}>
+            <CardContent sx={{ py: 3 }}>
+              <Typography variant="h6" sx={{ mb: 3, fontWeight: 600, color: '#1f2937' }}>
+                Select lines where you want to add comments:
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 3, color: '#6b7280' }}>
+                Click on any line that you think needs a comment to explain what it does. Selected lines will be highlighted in pink.
+              </Typography>
+
+              {/* Code Display with Line Selection */}
+              <Paper sx={{ mb: 3, overflow: 'hidden' }}>
+                <CodeContainer sx={{ maxHeight: 'none', padding: 0 }}>
+                  {/* Function signature line */}
+                  <Box sx={{ display: 'flex', minHeight: '21px', alignItems: 'center', px: 2, py: 1 }}>
+                    <LineNumber>01</LineNumber>
+                    <Typography sx={{ 
+                      fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+                      fontSize: '14px',
+                      color: '#569cd6',
+                      ml: 2
+                    }}>
+                      {selectedFunction.code.split('\n')[0]}
+                    </Typography>
+                  </Box>
+
+                  {/* Opening docstring quotes */}
+                  <Box sx={{ display: 'flex', minHeight: '21px', alignItems: 'center', px: 2 }}>
+                    <LineNumber>02</LineNumber>
+                    <Typography sx={{ 
+                      fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+                      fontSize: '14px',
+                      color: '#ce9178',
+                      ml: 2
+                    }}>
+                      &quot;&quot;&quot;
+                    </Typography>
+                  </Box>
+
+                  {/* Saved docstring content */}
+                  {savedDocstrings.length > 0 && savedDocstrings[savedDocstrings.length - 1].docstring.split('\n').map((docLine, docIndex) => (
+                    <Box key={`doc-${docIndex}`} sx={{ display: 'flex', minHeight: '21px', alignItems: 'center', px: 2 }}>
+                      <LineNumber>{String(docIndex + 3).padStart(2, '0')}</LineNumber>
+                      <Typography sx={{ 
+                        fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+                        fontSize: '14px',
+                        color: '#6a9955',
+                        fontStyle: 'italic',
+                        ml: 2
+                      }}>
+                        {docLine}
+                      </Typography>
+                    </Box>
+                  ))}
+
+                  {/* Closing docstring quotes */}
+                  <Box sx={{ display: 'flex', minHeight: '21px', alignItems: 'center', px: 2 }}>
+                    <LineNumber>{String((savedDocstrings.length > 0 ? savedDocstrings[savedDocstrings.length - 1].docstring.split('\n').length : 0) + 3).padStart(2, '0')}</LineNumber>
+                    <Typography sx={{ 
+                      fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+                      fontSize: '14px',
+                      color: '#ce9178',
+                      ml: 2
+                    }}>
+                      &quot;&quot;&quot;
+                    </Typography>
+                  </Box>
+
+                  {/* Function body - clickable lines */}
+                  {selectedFunction.code.split('\n').slice(1).map((line, index) => {
+                    const docstringLines = savedDocstrings.length > 0 ? savedDocstrings[savedDocstrings.length - 1].docstring.split('\n').length : 0;
+                    const lineNumber = index + docstringLines + 4; // Account for def line, opening """, docstring, closing """
+                    const isClickableLine = line.trim().length > 0;
+                    const isSelected = selectedLinesForCommenting.has(lineNumber);
+                    
+                    return (
+                      <Box 
+                        key={`line-${index}`} 
+                        sx={{ 
+                          display: 'flex', 
+                          minHeight: '21px', 
+                          alignItems: 'center', 
                           px: 2,
-                          py: 0.5,
-                          '&:hover': {
-                            bgcolor: validationAnswers[question.key] === option ? '#1f2937' : 'rgba(0, 0, 0, 0.04)',
-                            borderColor: '#000000'
+                          position: 'relative',
+                          cursor: isClickableLine ? 'pointer' : 'default',
+                          '&:hover': isClickableLine ? {
+                            backgroundColor: 'rgba(255, 192, 203, 0.2)' // Light pink hover
+                          } : {}
+                        }}
+                        onClick={() => {
+                          if (isClickableLine) {
+                            const newSelected = new Set(selectedLinesForCommenting);
+                            const newCommentLineContent = new Map(commentLineContent);
+                            
+                            if (isSelected) {
+                              newSelected.delete(lineNumber);
+                              newCommentLineContent.delete(lineNumber);
+                            } else {
+                              newSelected.add(lineNumber);
+                              newCommentLineContent.set(lineNumber, line.trim());
+                            }
+                            
+                            setSelectedLinesForCommenting(newSelected);
+                            setCommentLineContent(newCommentLineContent);
                           }
                         }}
                       >
-                        {option}
-                      </Button>
-                    ))}
-                  </Box>
-                </CardContent>
-              </StyledCard>
-            ))}
+                        {/* Pink highlight overlay */}
+                        {isSelected && (
+                          <Box sx={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            backgroundColor: 'rgba(255, 192, 203, 0.4)', // Pink highlight
+                            zIndex: 1,
+                            pointerEvents: 'none'
+                          }} />
+                        )}
+                        
+                        <LineNumber sx={{ zIndex: 2 }}>{String(lineNumber).padStart(2, '0')}</LineNumber>
+                        <Typography sx={{ 
+                          fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+                          fontSize: '14px',
+                          color: '#d4d4d4',
+                          ml: 2,
+                          zIndex: 2,
+                          opacity: isClickableLine ? 1 : 0.5
+                        }}>
+                          {line}
+                        </Typography>
+                      </Box>
+                    );
+                  })}
+                </CodeContainer>
+              </Paper>
 
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 3 }}>
-              <Button 
-                variant="contained" 
-                disabled={!allQuestionsAnswered}
-                onClick={() => setShowInlineComments(true)}
-                sx={{ 
-                  bgcolor: allQuestionsAnswered ? '#000000' : '#9ca3af',
-                  color: 'white',
-                  '&:hover': { 
-                    bgcolor: allQuestionsAnswered ? '#1f2937' : '#9ca3af' 
-                  },
-                  px: 4,
-                  py: 1.5,
-                  fontSize: '0.875rem',
-                  fontWeight: 500,
-                  maxWidth: '400px'
-                }}
-              >
-                {allQuestionsAnswered ? 'CONTINUE TO NEXT STEP' : 'MUST ANSWER ALL QUESTIONS TO PROCEED'}
-              </Button>
-            </Box>
-          </Box>
+              {/* Action buttons */}
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                <Button 
+                  variant="outlined"
+                  onClick={() => {
+                    setShowLineSelection(false);
+                    setShowValidation(true);
+                    setSelectedLinesForCommenting(new Set());
+                  }}
+                  sx={{ 
+                    borderColor: '#6b7280',
+                    color: '#6b7280',
+                    '&:hover': { 
+                      borderColor: '#374151',
+                      backgroundColor: 'rgba(107, 114, 128, 0.05)'
+                    },
+                    px: 4,
+                    py: 1.5,
+                    fontSize: '0.875rem',
+                    fontWeight: 500
+                  }}
+                >
+                  BACK TO VALIDATION
+                </Button>
+
+                <Button 
+                  variant="contained"
+                  disabled={selectedLinesForCommenting.size === 0}
+                  onClick={() => {
+                    // Auto-create comment boxes with "# New Comment" for selected lines
+                    const newComments = new Map(inlineComments);
+                    const newSelectedCommentLines = new Set(selectedCommentLines);
+                    
+                    selectedLinesForCommenting.forEach(lineNumber => {
+                      if (!newComments.has(lineNumber)) {
+                        newComments.set(lineNumber, '# New Comment');
+                        newSelectedCommentLines.add(lineNumber);
+                      }
+                    });
+                    
+                    setInlineComments(newComments);
+                    setSelectedCommentLines(newSelectedCommentLines);
+                    setShowLineSelection(false);
+                    setShowInlineComments(true);
+                  }}
+                  sx={{ 
+                    bgcolor: selectedLinesForCommenting.size > 0 ? '#000000' : '#9ca3af',
+                    color: 'white',
+                    '&:hover': { 
+                      bgcolor: selectedLinesForCommenting.size > 0 ? '#1f2937' : '#9ca3af' 
+                    },
+                    px: 4,
+                    py: 1.5,
+                    fontSize: '0.875rem',
+                    fontWeight: 500
+                  }}
+                >
+                  {selectedLinesForCommenting.size === 0 
+                    ? 'SELECT LINES TO CONTINUE' 
+                    : `CONTINUE WITH ${selectedLinesForCommenting.size} SELECTED LINE${selectedLinesForCommenting.size > 1 ? 'S' : ''}`
+                  }
+                </Button>
+              </Box>
+            </CardContent>
+          </StyledCard>
         )}
 
         {/* Inline Comments Section */}
@@ -1631,13 +2032,13 @@ Utility functions for basic preprocessing of microscopy data.
                   const docstringLines = savedDocstrings.length > 0 ? savedDocstrings[savedDocstrings.length - 1].docstring.split('\n').length : 0;
                   const lineNumber = index + docstringLines + 4; // Account for def line, opening """, docstring, closing """
                   const hasComment = inlineComments.has(lineNumber);
-                  // Allow clicking on any line that has content (not empty)
-                  const isClickableLine = line.trim().length > 0;
+                  // Only allow clicking on lines that were selected in the line selection screen
+                  const isClickableLine = selectedLinesForCommenting.has(lineNumber);
                   
                   return (
                     <React.Fragment key={index}>
-                      {/* Editable comment line above if comment exists */}
-                      {hasComment && (
+                      {/* Editable comment line above if comment exists and line was selected */}
+                      {hasComment && isClickableLine && (
                         <Box 
                           sx={{ 
                             position: 'relative',
@@ -1716,6 +2117,9 @@ Utility functions for basic preprocessing of microscopy data.
                               const newSelected = new Set(selectedCommentLines);
                               newSelected.delete(lineNumber);
                               setSelectedCommentLines(newSelected);
+                              const newCommentLineContent = new Map(commentLineContent);
+                              newCommentLineContent.delete(lineNumber);
+                              setCommentLineContent(newCommentLineContent);
                             }}
                             style={{
                               backgroundColor: 'transparent',
@@ -1760,6 +2164,9 @@ Utility functions for basic preprocessing of microscopy data.
                               const newSelected = new Set(selectedCommentLines);
                               newSelected.delete(lineNumber);
                               setSelectedCommentLines(newSelected);
+                              const newCommentLineContent = new Map(commentLineContent);
+                              newCommentLineContent.delete(lineNumber);
+                              setCommentLineContent(newCommentLineContent);
                             } else {
                               // Add new comment
                               const newComments = new Map(inlineComments);
@@ -1768,6 +2175,9 @@ Utility functions for basic preprocessing of microscopy data.
                               const newSelected = new Set(selectedCommentLines);
                               newSelected.add(lineNumber);
                               setSelectedCommentLines(newSelected);
+                              const newCommentLineContent = new Map(commentLineContent);
+                              newCommentLineContent.set(lineNumber, line.trim());
+                              setCommentLineContent(newCommentLineContent);
                             }
                           }
                         }}
@@ -2770,26 +3180,6 @@ def smooth_image(image, factor):
           </Box>
         )}
 
-        {/* Debug: Show saved docstrings */}
-        {savedDocstrings.length > 0 && !showInlineComments && (
-          <StyledCard sx={{ mt: 3, backgroundColor: '#f0f9ff' }}>
-            <CardContent sx={{ py: 2 }}>
-              <Typography variant="body2" color="text.primary" sx={{ mb: 1, fontWeight: 500 }}>
-                💾 Saved Docstrings:
-              </Typography>
-              {savedDocstrings.map((item, index) => (
-                <Box key={index} sx={{ mb: 1, p: 1, backgroundColor: 'rgba(0,0,0,0.05)', borderRadius: 1 }}>
-                  <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
-                    <strong>{item.fileName}</strong> - {item.functionName}() [Lines {item.startLine}-{item.endLine}]
-                  </Typography>
-                  <Typography variant="body2" sx={{ fontSize: '0.75rem', fontStyle: 'italic', mt: 0.5 }}>
-                    &quot;{item.docstring.substring(0, 100)}{item.docstring.length > 100 ? '...' : ''}&quot;
-                  </Typography>
-                </Box>
-              ))}
-            </CardContent>
-          </StyledCard>
-        )}
         
     {/* Interactive comment selection tooltip */}
       {/* Interactive comment selection tooltip */}
@@ -2860,17 +3250,20 @@ def smooth_image(image, factor):
           >
 {(() => {
               // Check if selectedFile matches a state variable and presentLineContent matches a key
-              const useLoadingOptions = selectedFile === 'loading' && loading[presentLineContent];
-              const usePlottingOptions = selectedFile === 'plotting' && plotting[presentLineContent];
-              const usePreprocessingOptions = selectedFile === 'preprocessing' && preprocessing[presentLineContent];
+              // Get the line content for the hovered comment line
+              const hoveredLineContent = commentLineContent.get(hoveredCommentLine) || presentLineContent;
+              
+              const useLoadingOptions = selectedFile === 'loading' && loading[hoveredLineContent];
+              const usePlottingOptions = selectedFile === 'plotting' && plotting[hoveredLineContent];
+              const usePreprocessingOptions = selectedFile === 'preprocessing' && preprocessing[hoveredLineContent];
               
               let commentOptions;
               if (useLoadingOptions) {
-                commentOptions = loading[presentLineContent];
+                commentOptions = loading[hoveredLineContent];
               } else if (usePlottingOptions) {
-                commentOptions = plotting[presentLineContent];
+                commentOptions = plotting[hoveredLineContent];
               } else if (usePreprocessingOptions) {
-                commentOptions = preprocessing[presentLineContent];
+                commentOptions = preprocessing[hoveredLineContent];
               } else {
                 commentOptions = ['# Initialize preprocessing_parameters dictionary.', '# Define variable.'];
               }
@@ -2972,9 +3365,9 @@ export default function ActivityDashboard() {
   const [selectedFunction, setSelectedFunction] = useState(null);
   const [selectedFile, setSelectedFile] = useState('');
   const [openFiles, setOpenFiles] = useState([
-    { id: 'directory', name: 'PROJECT DIRECTORY', type: 'directory' },
-    { id: 'main.py', name: 'MAIN.PY', type: 'python', content: pythonCode }
+    { id: 'directory', name: 'PROJECT DIRECTORY', type: 'directory' }
   ]);
+  const [fileModal, setFileModal] = useState({ open: false, file: null });
 
   const handleTabChange = (event, newValue) => {
     setCurrentTab(newValue);
@@ -3006,22 +3399,32 @@ export default function ActivityDashboard() {
     const fileNameWithoutExtension = fileName.replace(/\.py$/, '');
     setSelectedFile(fileNameWithoutExtension);
     
-    const existingIndex = openFiles.findIndex(file => file.id === fileName);
+    // Create file object and open in modal
+    const file = {
+      id: fileName,
+      name: fileName.toUpperCase(),
+      type: fileType,
+      content: getFileContent(fileName, fileType)
+    };
     
-    if (existingIndex !== -1) {
-      setCurrentTab(existingIndex);
-    } else {
-      const newFile = {
-        id: fileName,
-        name: fileName.toUpperCase(),
-        type: fileType,
-        content: getFileContent(fileName, fileType)
-      };
-      
-      setOpenFiles(prev => [...prev, newFile]);
-      setCurrentTab(openFiles.length);
-    }
+    setFileModal({ open: true, file });
   };
+
+  const handleCloseFileModal = () => {
+    setFileModal({ open: false, file: null });
+  };
+
+  // Handle ESC key to close modal
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape' && fileModal.open) {
+        handleCloseFileModal();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [fileModal.open]);
 
   const handleFunctionSelect = (functionData) => {
     setSelectedFunction(functionData);
@@ -3218,13 +3621,7 @@ Data Sources:
     return (
       <Box sx={{ minHeight: '100vh', backgroundColor: '#f3f4f6', py: 3 }}>
         <Container maxWidth="md">
-          <StyledCard>
-            <CardContent sx={{ py: 2 }}>
-              <Typography variant="h6" color="text.primary" fontWeight={500} textAlign="center">
-                Comments Activity
-              </Typography>
-            </CardContent>
-          </StyledCard>
+        
 
           <StyledCard>
             <CardContent sx={{ py: 3 }}>
@@ -3304,13 +3701,7 @@ Data Sources:
   return (
     <Box sx={{ minHeight: '100vh', backgroundColor: '#f3f4f6', py: 3 }}>
       <Container maxWidth="md">
-        <StyledCard>
-          <CardContent sx={{ py: 2 }}>
-            <Typography variant="h6" color="text.primary" fontWeight={500} textAlign="center">
-              {'{Activity Title}'}
-            </Typography>
-          </CardContent>
-        </StyledCard>
+      
 
         <StyledCard>
           <CardContent sx={{ py: 3 }}>
@@ -3323,55 +3714,69 @@ Data Sources:
         </StyledCard>
 
         <Paper sx={{ mb: 3, overflow: 'hidden' }}>
-          <StyledTabs value={currentTab} onChange={handleTabChange}>
-            {openFiles.map((file, index) => (
-              <Tab 
-                key={file.id} 
-                label={
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <span>{file.name}</span>
-                    {file.id !== 'directory' && (
-                      <Box
-                        component="span"
-                        onClick={(event) => handleCloseFile(event, file.id)}
-                        sx={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          width: 20,
-                          height: 20,
-                          borderRadius: '50%',
-                          color: 'inherit',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s ease',
-                          '&:hover': {
-                            backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                            color: 'white'
-                          }
-                        }}
-                      >
-                        <CloseIcon fontSize="small" />
-                      </Box>
-                    )}
-                  </Box>
-                }
-              />
-            ))}
-          </StyledTabs>
-          
-          {openFiles.map((file, index) => (
-            <TabPanel key={file.id} value={currentTab} index={index}>
-              {file.type === 'directory' ? (
-                <DirectoryView onFileClick={handleFileClick} openFiles={openFiles} />
-              ) : (
-                <FileContentView file={file} onFunctionSelect={handleFunctionSelect} />
-              )}
-            </TabPanel>
-          ))}
+          <Box sx={{ p: 2, backgroundColor: '#1a1a1a', borderBottom: '1px solid #333' }}>
+            <Typography variant="h6" sx={{ color: '#d1d5db', fontWeight: 600 }}>
+              PROJECT DIRECTORY
+            </Typography>
+          </Box>
+          <DirectoryView onFileClick={handleFileClick} />
         </Paper>
 
+        {/* File Modal */}
+        {fileModal.open && fileModal.file && (
+          <Box 
+            onClick={handleCloseFileModal}
+            sx={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 9999
+            }}>
+            <Paper 
+              onClick={(e) => e.stopPropagation()}
+              sx={{ 
+                width: '90%', 
+                height: '90%', 
+                maxWidth: '1200px',
+                display: 'flex',
+                flexDirection: 'column',
+                backgroundColor: '#1a1a1a'
+              }}>
+              {/* Modal Header */}
+              <Box sx={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                p: 2, 
+                borderBottom: '1px solid #333' 
+              }}>
+                <Typography variant="h6" sx={{ color: '#d1d5db', fontWeight: 600 }}>
+                  {fileModal.file.name}
+                </Typography>
+                <IconButton
+                  onClick={handleCloseFileModal}
+                  sx={{ color: '#d1d5db' }}
+                >
+                  <CloseIcon />
+                </IconButton>
+              </Box>
+              
+              {/* Modal Content */}
+              <Box sx={{ flex: 1, overflow: 'auto' }}>
+                <FileContentView file={fileModal.file} onFunctionSelect={handleFunctionSelect} />
+              </Box>
+            </Paper>
+          </Box>
+        )}
+
         <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-          <Button 
+          {/* <Button 
             variant="contained" 
             sx={{ 
               bgcolor: '#000000', 
@@ -3384,7 +3789,7 @@ Data Sources:
             }}
           >
             NEED HELP?
-          </Button>
+          </Button> */}
           <Button 
             variant="contained" 
             sx={{ 
