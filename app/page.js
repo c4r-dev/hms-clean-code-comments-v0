@@ -450,7 +450,7 @@ const FileItem = ({ name, fileType, isHighlighted, isMain, level = 1, onFileClic
   </TreeItem>
 );
 
-const DirectoryView = ({ onFileClick }) => (
+const DirectoryView = ({ onFileClick, openFiles }) => (
   <DirectoryContent>
     <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, pb: 1, borderBottom: '1px solid #4b5563' }}>
       <Typography variant="body2" sx={{ fontWeight: 500, color: '#d1d5db', flex: 1 }}>
@@ -462,26 +462,26 @@ const DirectoryView = ({ onFileClick }) => (
     </Box>
 
     <FolderItem name="src" fileCount="3">
-      <FileItem name="loading.py" fileType="python" onFileClick={onFileClick} />
-      <FileItem name="plotting.py" fileType="python" isHighlighted onFileClick={onFileClick} />
-      <FileItem name="preprocessing.py" fileType="python" onFileClick={onFileClick} />
+      <FileItem name="loading.py" fileType="python" isHighlighted={openFiles.some(file => file.id === 'loading.py')} onFileClick={onFileClick} />
+      <FileItem name="plotting.py" fileType="python" isHighlighted={openFiles.some(file => file.id === 'plotting.py')} onFileClick={onFileClick} />
+      <FileItem name="preprocessing.py" fileType="python" isHighlighted={openFiles.some(file => file.id === 'preprocessing.py')} onFileClick={onFileClick} />
     </FolderItem>
 
     <FolderItem name="data" fileCount="4">
-      <FileItem name="20191010_tail_01.nd2" fileType="data" onFileClick={onFileClick} />
-      <FileItem name="sub-11-YAaLR_oophys.nwb" fileType="data" onFileClick={onFileClick} />
-      <FileItem name="20240523_Vang-1_37.tif" fileType="image" onFileClick={onFileClick} />
-      <FileItem name="citations.txt" fileType="text" onFileClick={onFileClick} />
+      <FileItem name="20191010_tail_01.nd2" fileType="data" isHighlighted={openFiles.some(file => file.id === '20191010_tail_01.nd2')} onFileClick={onFileClick} />
+      <FileItem name="sub-11-YAaLR_oophys.nwb" fileType="data" isHighlighted={openFiles.some(file => file.id === 'sub-11-YAaLR_oophys.nwb')} onFileClick={onFileClick} />
+      <FileItem name="20240523_Vang-1_37.tif" fileType="image" isHighlighted={openFiles.some(file => file.id === '20240523_Vang-1_37.tif')} onFileClick={onFileClick} />
+      <FileItem name="citations.txt" fileType="text" isHighlighted={openFiles.some(file => file.id === 'citations.txt')} onFileClick={onFileClick} />
     </FolderItem>
 
     <FolderItem name="results" fileCount="4">
-      <FileItem name="20240523_Vang-1_37_comparison.png" fileType="image" onFileClick={onFileClick} />
-      <FileItem name="20191010_tail_01_comparison.png" fileType="image" onFileClick={onFileClick} />
-      <FileItem name="sub-11-YAaLR_oophys_comparison.png" fileType="image" onFileClick={onFileClick} />
-      <FileItem name="overview.png" fileType="image" onFileClick={onFileClick} />
+      <FileItem name="20240523_Vang-1_37_comparison.png" fileType="image" isHighlighted={openFiles.some(file => file.id === '20240523_Vang-1_37_comparison.png')} onFileClick={onFileClick} />
+      <FileItem name="20191010_tail_01_comparison.png" fileType="image" isHighlighted={openFiles.some(file => file.id === '20191010_tail_01_comparison.png')} onFileClick={onFileClick} />
+      <FileItem name="sub-11-YAaLR_oophys_comparison.png" fileType="image" isHighlighted={openFiles.some(file => file.id === 'sub-11-YAaLR_oophys_comparison.png')} onFileClick={onFileClick} />
+      <FileItem name="overview.png" fileType="image" isHighlighted={openFiles.some(file => file.id === 'overview.png')} onFileClick={onFileClick} />
     </FolderItem>
 
-    <FileItem name="main.py" fileType="python" isMain level={0} onFileClick={onFileClick} />
+    <FileItem name="main.py" fileType="python" isMain isHighlighted={openFiles.some(file => file.id === 'main.py')} level={0} onFileClick={onFileClick} />
   </DirectoryContent>
 );
 
@@ -489,6 +489,31 @@ const PythonCodeViewer = ({ code, onFunctionSelect }) => {
   const [highlightedCode, setHighlightedCode] = useState('');
   const [selectedFunction, setSelectedFunction] = useState(null);
   const [showPrompt, setShowPrompt] = useState(false);
+
+  console.log('PythonCodeViewer rendered with code:', code ? code.substring(0, 200) : 'NO CODE');
+  console.log('Code contains triple quotes:', code ? code.includes('"""') : 'NO CODE');
+
+  const processTripleQuotedStrings = (highlightedHtml) => {
+    console.log('processTripleQuotedStrings called!');
+    console.log('Input HTML:', highlightedHtml.substring(0, 500)); // Show first 500 chars
+    
+    // Very simple approach: just replace any occurrence of """ with orange version
+    let result = highlightedHtml;
+    
+    // Add debug marker so we know the function ran
+    result = '<!-- PROCESSED BY processTripleQuotedStrings -->' + result;
+    
+    // Replace triple quotes with orange styling - all variations
+    result = result.replace(/"""/g, '<span style="color: #ff8c00 !important; font-weight: bold; background-color: yellow;">"""</span>');
+    result = result.replace(/'''/g, '<span style="color: #ff8c00 !important; font-weight: bold; background-color: yellow;">\'\'\'</span>');
+    
+    // Also handle HTML encoded versions
+    result = result.replace(/&quot;&quot;&quot;/g, '<span style="color: #ff8c00 !important; font-weight: bold; background-color: yellow;">&quot;&quot;&quot;</span>');
+    result = result.replace(/&#x27;&#x27;&#x27;/g, '<span style="color: #ff8c00 !important; font-weight: bold; background-color: yellow;">&#x27;&#x27;&#x27;</span>');
+    
+    console.log('Output HTML:', result.substring(0, 500)); // Show first 500 chars of result
+    return result;
+  };
 
   useEffect(() => {
     const loadHighlightJS = async () => {
@@ -501,7 +526,8 @@ const PythonCodeViewer = ({ code, onFunctionSelect }) => {
           pythonScript.onload = () => {
             if (window.hljs) {
               const result = window.hljs.highlight(code, { language: 'python' });
-              setHighlightedCode(result.value);
+              const processedCode = processTripleQuotedStrings(result.value);
+              setHighlightedCode(processedCode);
             }
           };
           document.head.appendChild(pythonScript);
@@ -509,7 +535,8 @@ const PythonCodeViewer = ({ code, onFunctionSelect }) => {
         document.head.appendChild(script);
       } else if (window.hljs) {
         const result = window.hljs.highlight(code, { language: 'python' });
-        setHighlightedCode(result.value);
+        const processedCode = processTripleQuotedStrings(result.value);
+        setHighlightedCode(processedCode);
       }
     };
 
@@ -773,6 +800,62 @@ const FileContentView = ({ file, onFunctionSelect }) => {
 const ExampleSolutionViewer = ({ code }) => {
   const [highlightedCode, setHighlightedCode] = useState('');
 
+  const processTripleQuotedStrings = (highlightedHtml) => {
+    // Work with the original code to identify triple-quoted sections
+    // Then apply styling directly to the HTML
+    
+    // First, find all triple-quoted strings in the original code
+    const tripleQuoteMatches = [];
+    const patterns = [
+      /"""[\s\S]*?"""/g,
+      /'''[\s\S]*?'''/g
+    ];
+    
+    patterns.forEach(pattern => {
+      let match;
+      while ((match = pattern.exec(code)) !== null) {
+        tripleQuoteMatches.push({
+          start: match.index,
+          end: match.index + match[0].length,
+          content: match[0]
+        });
+      }
+    });
+    
+    if (tripleQuoteMatches.length === 0) {
+      return highlightedHtml;
+    }
+    
+    // Process each line and apply orange styling to triple-quoted content
+    const codeLines = code.split('\n');
+    const htmlLines = highlightedHtml.split('\n');
+    
+    let currentPos = 0;
+    const processedLines = htmlLines.map((htmlLine, lineIndex) => {
+      const codeLine = codeLines[lineIndex] || '';
+      const lineStart = currentPos;
+      const lineEnd = currentPos + codeLine.length;
+      
+      // Check if this line contains any part of a triple-quoted string
+      const isInTripleQuote = tripleQuoteMatches.some(match => 
+        (match.start >= lineStart && match.start <= lineEnd) || // starts on this line
+        (match.end >= lineStart && match.end <= lineEnd) || // ends on this line  
+        (match.start <= lineStart && match.end >= lineEnd) // spans this line
+      );
+      
+      currentPos = lineEnd + 1; // +1 for newline
+      
+      if (isInTripleQuote) {
+        // Apply green color for docstrings to match Your Solution tab
+        return `<span style="color: #6a9955; font-style: italic;">${htmlLine.replace(/<span[^>]*>/g, '').replace(/<\/span>/g, '')}</span>`;
+      }
+      
+      return htmlLine;
+    });
+    
+    return processedLines.join('\n');
+  };
+
   useEffect(() => {
     const loadHighlightJS = async () => {
       if (typeof window !== 'undefined' && window.hljs) {
@@ -780,16 +863,8 @@ const ExampleSolutionViewer = ({ code }) => {
           const result = window.hljs.highlight(code, { language: 'python' });
           let processedCode = result.value;
           
-          // Post-process to ensure docstring consistency
-          // Find all content between triple quotes and wrap it in hljs-string class
-          processedCode = processedCode.replace(
-            /(<span class="hljs-string">"""[\s\S]*?"""<\/span>)/g,
-            (match) => {
-              // Remove any nested highlighting within the docstring
-              const cleanContent = match.replace(/<span class="hljs-[^"]*">/g, '').replace(/<\/span>/g, '');
-              return `<span class="hljs-string">${cleanContent.replace(/<span class="hljs-string">|<\/span>/g, '')}</span>`;
-            }
-          );
+          // Apply green color processing for triple-quoted strings to match Your Solution tab
+          processedCode = processTripleQuotedStrings(processedCode);
           
           setHighlightedCode(processedCode);
         } catch (error) {
@@ -1142,7 +1217,29 @@ Utility functions for basic preprocessing of microscopy data.
   };
 
   const handleInsertTemplate = () => {
-    setDocstring(templates[currentTemplate].content);
+    const templateContent = templates[currentTemplate].content;
+    
+    // Extract only the content between the triple quotes
+    const tripleQuoteMatch = templateContent.match(/"""([\s\S]*?)"""/);
+    if (tripleQuoteMatch && tripleQuoteMatch[1]) {
+      // Get the content between the quotes and clean it up
+      let docstringContent = tripleQuoteMatch[1];
+      // Remove leading/trailing whitespace from each line but preserve structure
+      const lines = docstringContent.split('\n');
+      const cleanedLines = lines.map(line => line.trimEnd()); // Remove trailing spaces but keep leading indentation
+      // Remove completely empty lines at start and end
+      while (cleanedLines.length > 0 && cleanedLines[0].trim() === '') {
+        cleanedLines.shift();
+      }
+      while (cleanedLines.length > 0 && cleanedLines[cleanedLines.length - 1].trim() === '') {
+        cleanedLines.pop();
+      }
+      setDocstring(cleanedLines.join('\n'));
+    } else {
+      // Fallback to original content if no triple quotes found
+      setDocstring(templateContent);
+    }
+    
     setShowHelp(false);
     setIsEditing(true);
   };
@@ -3160,7 +3257,7 @@ Data Sources:
 
               <FolderItem name="src" fileCount="3">
                 <FileItem name="loading.py" fileType="python" />
-                <FileItem name="plotting.py" fileType="python" isHighlighted />
+                <FileItem name="plotting.py" fileType="python" />
                 <FileItem name="preprocessing.py" fileType="python" />
               </FolderItem>
 
@@ -3182,21 +3279,7 @@ Data Sources:
             </DirectoryContent>
           </Paper>
 
-          <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-            <Button 
-              variant="contained" 
-              sx={{ 
-                bgcolor: '#000000', 
-                color: 'white',
-                '&:hover': { bgcolor: '#1f2937' },
-                px: 3,
-                py: 1,
-                fontSize: '0.875rem',
-                fontWeight: 500
-              }}
-            >
-              NEED HELP?
-            </Button>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
             <Button 
               variant="contained" 
               onClick={() => setActivityStarted(true)}
@@ -3279,7 +3362,7 @@ Data Sources:
           {openFiles.map((file, index) => (
             <TabPanel key={file.id} value={currentTab} index={index}>
               {file.type === 'directory' ? (
-                <DirectoryView onFileClick={handleFileClick} />
+                <DirectoryView onFileClick={handleFileClick} openFiles={openFiles} />
               ) : (
                 <FileContentView file={file} onFunctionSelect={handleFunctionSelect} />
               )}

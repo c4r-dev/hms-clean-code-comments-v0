@@ -40,3 +40,27 @@ a {
     color-scheme: dark;
   }
 }
+
+/* Force orange color for triple-quoted strings */
+.triple-quote-string {
+  color: #ff8c00 !important;
+  font-weight: normal !important;
+}
+
+/* Green color for docstring content */
+.docstring-content {
+  color: #6a9955 !important;
+  font-style: italic !important;
+}
+
+/* Orange color specifically for triple quotes */
+.triple-quotes {
+  color: #ff8c00 !important;
+  font-style: normal !important;
+}
+
+/* Override any highlight.js styling for strings */
+.hljs-string.triple-quote-string,
+.hljs-comment.triple-quote-string {
+  color: #ff8c00 !important;
+}
