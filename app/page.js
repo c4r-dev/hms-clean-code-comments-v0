@@ -1634,7 +1634,7 @@ Utility functions for basic preprocessing of microscopy data.
                         Please answer all questions
                       </Typography>
                       <Typography variant="body2" sx={{ color: '#1e3a8a', lineHeight: 1.5 }}>
-                        Review each question and select "Yes" or "No" based on your docstring content.
+                        Review each question and select &quot;Yes&quot; or &quot;No&quot; based on your docstring content.
                       </Typography>
                     </Box>
                   </Box>
@@ -1663,7 +1663,7 @@ Utility functions for basic preprocessing of microscopy data.
                         Docstring needs improvement
                       </Typography>
                       <Typography variant="body2" sx={{ color: '#991b1b', lineHeight: 1.5, mb: 2 }}>
-                        You've answered "No" to one or more questions. A good docstring should address all aspects of the function. 
+                        You&quot;ve answered &quot;No&quot; to one or more questions. A good docstring should address all aspects of the function. 
                         Please edit your docstring to include the missing information.
                       </Typography>
                       <Typography variant="body2" sx={{ color: '#7f1d1d', fontSize: '0.875rem', fontStyle: 'italic' }}>
