@@ -1420,13 +1420,13 @@ Utility functions for basic preprocessing of microscopy data.
   return (
     <Box sx={{ minHeight: '100vh', backgroundColor: '#f3f4f6', py: 3 }}>
       <Container maxWidth="md">
-        <StyledCard>
+        {/* <StyledCard>
           <CardContent sx={{ py: 2 }}>
             <Typography variant="h6" color="text.primary" fontWeight={500} textAlign="center">
               {showInlineComments ? 'Screen 5a' : '{Activity Title}'}
             </Typography>
           </CardContent>
-        </StyledCard>
+        </StyledCard> */}
 
         {!showInlineComments && (
         <StyledCard>
