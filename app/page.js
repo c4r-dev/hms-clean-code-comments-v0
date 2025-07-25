@@ -50,7 +50,7 @@ const TreeItem = styled(Box, {
   marginLeft: level * 24,
   borderRadius: 4,
   cursor: 'pointer',
-  border: isMain ? '2px solid #eab308' : 'none',
+  border: 'none',
   backgroundColor: isHighlighted ? '#6366f1' : 'transparent',
   '&:hover': {
     backgroundColor: isHighlighted ? '#5b21b6' : '#4b5563'
@@ -427,20 +427,6 @@ const FileItem = ({ name, fileType, isHighlighted, isMain, level = 1, onFileClic
     <Typography variant="body2" sx={{ ml: 1, flex: 1, color: '#e5e7eb' }}>
       {name}
     </Typography>
-    {isMain && (
-      <Box sx={{ 
-        backgroundColor: '#eab308', 
-        color: '#000', 
-        px: 1, 
-        py: 0.25, 
-        borderRadius: 1, 
-        fontSize: '0.75rem',
-        fontWeight: 'bold',
-        mr: 1
-      }}>
-        MAIN (FIXED)
-      </Box>
-    )}
     <Typography variant="body2" sx={{ color: '#9ca3af', fontSize: '0.75rem', minWidth: '80px' }}>
       {fileType === 'python' ? 'Python file' : 
        fileType === 'data' ? 'Data file' :
@@ -603,25 +589,60 @@ const PythonCodeViewer = ({ code, onFunctionSelect }) => {
     <>
       <CodeContainer>
         <div onMouseUp={handleTextSelection}>
-          {codeLines.map((line, index) => (
-            <div key={index} style={{ display: 'flex', minHeight: '21px', alignItems: 'flex-start' }}>
-              <LineNumber>{String(index + 1).padStart(2, '0')}</LineNumber>
-              <div 
-                style={{ 
-                  flex: 1, 
-                  fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
-                  fontSize: '14px',
-                  lineHeight: 1.5,
-                  userSelect: 'text',
-                  whiteSpace: 'pre',
-                  overflow: 'visible'
-                }}
-                dangerouslySetInnerHTML={{ 
-                  __html: highlightedCode ? line : line.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/ /g, '&nbsp;')
-                }}
-              />
-            </div>
-          ))}
+          {codeLines.map((line, index) => {
+            const lineNumber = index + 1;
+            const trimmedLine = line.replace(/<[^>]*>/g, '').trim(); // Remove HTML tags for checking
+            const isFunctionDef = trimmedLine.startsWith('def ') && trimmedLine.includes('(') && 
+              !trimmedLine.startsWith('def load_tif(') && !trimmedLine.startsWith('def load_nd2(') && 
+              !trimmedLine.startsWith('def plot_single_file(') &&
+              !trimmedLine.startsWith('def normalize_image(') && 
+              !trimmedLine.startsWith('def downsample_image(') && 
+              !trimmedLine.startsWith('def smooth_image(');
+            
+            // Find the corresponding function object for this line
+            const functionAtLine = functions.find(func => func.startLine === index);
+            
+            return (
+              <div key={index} style={{ display: 'flex', minHeight: '21px', alignItems: 'flex-start' }}>
+                <LineNumber>{String(lineNumber).padStart(2, '0')}</LineNumber>
+                <div 
+                  style={{ 
+                    flex: 1, 
+                    fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+                    fontSize: '14px',
+                    lineHeight: 1.5,
+                    userSelect: 'text',
+                    whiteSpace: 'pre',
+                    overflow: 'visible',
+                    cursor: isFunctionDef ? 'pointer' : 'text',
+                    backgroundColor: isFunctionDef ? 'rgba(100, 200, 255, 0.1)' : 'transparent',
+                    padding: isFunctionDef ? '2px 4px' : '0',
+                    borderRadius: isFunctionDef ? '3px' : '0',
+                    transition: 'background-color 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (isFunctionDef) {
+                      e.target.style.backgroundColor = 'rgba(100, 200, 255, 0.2)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (isFunctionDef) {
+                      e.target.style.backgroundColor = 'rgba(100, 200, 255, 0.1)';
+                    }
+                  }}
+                  onClick={() => {
+                    if (isFunctionDef && functionAtLine) {
+                      setSelectedFunction(functionAtLine);
+                      setShowPrompt(true);
+                    }
+                  }}
+                  dangerouslySetInnerHTML={{ 
+                    __html: highlightedCode ? line : line.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/ /g, '&nbsp;')
+                  }}
+                />
+              </div>
+            );
+          })}
           <div style={{ marginTop: '16px', color: '#6a9955', display: 'flex' }}>
             <LineNumber>...</LineNumber>
             <span style={{ fontStyle: 'italic' }}>...</span>
@@ -1055,6 +1076,48 @@ Utility functions for basic preprocessing of microscopy data.
       "# Crop image"
     ]
   });
+  const [main, setMain] = useState({
+    "docstring": "main.py\nLoad microscopy / neurophysiology image data in one of several supported formats and apply a consistent set of\npreprocessing steps as required by each format. The script also saves per‑file figures visualizing each file after\nevery preprocessing steps, as well as an overview plot of the fully processed images.\nSupported formats\n-----------------\n* .nd2 – Nikon Elements files\n* .tiff/.tif – multipage or OME‑TIFF stacks\n* .nwb – NeurodataWithoutBorders containers\nHelper modules expected in src:\n* loading – format‑specific readers and metadata loaders\n* preprocessing – normalisation, cropping, down‑sampling, smoothing\n* plotting – figure generation utilities",
+    "if path.endswith('.nd2'):": [
+      "# Decide which low‑level loader to call based on the file extension.",
+      "# Get file format"
+    ],
+    "image_parameters = {": [
+      "# Pack the flags into a dictionary so later code is self‑explanatory.",
+      "# Package results"
+    ],
+    "files = ['20191010_tail_01.nd2', '20240523_Vang-1_37.tif', 'sub-11-YAaLR_ophys.nwb']": [
+      "# Files to be processed.",
+      "# The list of files we will be working with."
+    ],
+    "processed_images = []": [
+      "# Initialize a list to keep track of the fully processed images.",
+      "# List of finished images"
+    ],
+    "image, image_parameters = load_file(f\"data\\\\{filename}\")": [
+      "# 1. Load data and processing flags",
+      "# 1. Load file"
+    ],
+    "if not image_parameters['is_mip']:": [
+      "# 2. Conditional steps based on per‑file flags",
+      "# 2. Check if image is (mip/normalized/cropped) and if not then do that"
+    ],
+    "image = preprocessing.downsample_image(image=image, factor=image_parameters['downsampling_factor'])": [
+      "# 3. Always‑run steps controlled by numeric parameters",
+      "# 3. Downsample & blur"
+    ],
+    "file_identifier = filename.split('.')[0]": [
+      "# 4. Write a side‑by‑side comparison figure for this file",
+      "# 4. Plot each step's image"
+    ],
+    "plotting.plot_multiple_files(filenames=files, images=processed_images, output_path=f\"results\\\\overview.png\")": [
+      "# 5. Save an overview plot of the final images",
+      "# 5. Plot all the finished images"
+    ],
+    "for filename in files:": [
+      "# Iterate over each file"
+    ]
+  });
 
   // Add CSS for placeholder styling
   useEffect(() => {
@@ -1264,27 +1327,93 @@ Utility functions for basic preprocessing of microscopy data.
     setSelectedLinesForCommenting(new Set());
   };
 
-  const allQuestionsAnswered = Object.values(validationAnswers).every(answer => answer === 'YES' || answer === 'NO');
+  const allQuestionsAnswered = Object.values(validationAnswers).every(answer => answer === 'YES' || answer === 'NO' || answer === 'UNSURE');
   const allAnswersYes = Object.values(validationAnswers).every(answer => answer === 'YES');
   const hasNoAnswers = Object.values(validationAnswers).some(answer => answer === 'NO');
+  const hasUnsureAnswers = Object.values(validationAnswers).some(answer => answer === 'UNSURE');
   const hasUnansweredQuestions = Object.values(validationAnswers).some(answer => answer === '');
+
+  // Generate specific feedback based on which questions have NO or UNSURE answers
+  const getSpecificFeedback = () => {
+    const feedback = [];
+    
+    if (validationAnswers.describes === 'NO') {
+      feedback.push({
+        type: 'error',
+        title: 'Your docstring needs some work.',
+        message: 'The exact extent of the function description depends on the complexity of your function, but you should generally make sure that it covers each of the following:\n\n1. Basic aim: What does your function do and why?\n2. Process: How does your function accomplish its aim, and what major steps are involved?\n3. Process-altering conditions: Does you function support a number of different ways of accomplishing its aim, and select one based on a passed argument, or if an input meets a particular condition?\n4. Important notes & caveats: Does your function rely on a particular assumption? Does it produce an unintuitive result if an input is of a particular datatype? You\'ll want to spell out warnings for things of that nature.\n\nTry to adjust your docstring to meet this requirement.'
+      });
+    } else if (validationAnswers.describes === 'UNSURE') {
+      feedback.push({
+        type: 'warning',
+        title: 'Consider Improving Your Function Description',
+        message: 'The exact extent of the function description depends on the complexity of your function, but you should generally make sure that it covers each of the following:\n\n1. Basic aim: What does your function do and why?\n2. Process: How does your function accomplish its aim, and what major steps are involved?\n3. Process-altering conditions: Does you function support a number of different ways of accomplishing its aim, and select one based on a passed argument, or if an input meets a particular condition?\n4. Important notes & caveats: Does your function rely on a particular assumption? Does it produce an unintuitive result if an input is of a particular datatype? You\'ll want to spell out warnings for things of that nature.\n\nDoes your docstring meet these requirements?'
+      });
+    }
+
+    if (validationAnswers.inputs === 'NO') {
+      feedback.push({
+        type: 'error',
+        title: 'Your docstring needs some work.',
+        message: 'A complete docstring should list every input argument and its expected datatype(s). It should also clearly explain the purpose the input serves in the context of the function (e.g. What is it used for? What are we doing with it?).\n\nTry to adjust your docstring to meet this requirement.'
+      });
+    } else if (validationAnswers.inputs === 'UNSURE') {
+      feedback.push({
+        type: 'warning',
+        title: 'Consider Improving Your Function Description',
+        message: 'A complete docstring should list every input argument and its expected datatype(s). It should also clearly explain the purpose the input serves in the context of the function (e.g. What is it used for? What are we doing with it?).\n\nDoes your docstring meet this requirement?'
+      });
+    }
+
+    if (validationAnswers.outputs === 'NO') {
+      feedback.push({
+        type: 'error',
+        title: 'Your docstring needs some work.',
+        message: 'A complete docstring should list every output it returns and its expected datatype(s). In the case of more complex data structures, it should also describe the nature of their contents. For example:\n\n- Dictionaries should have their keys listed and their corresponding values described.\n- Numpy arrays with consistent dimensions should have those dimensions listed and explained (e.g. instead of "Numpy array", consider "Numpy array of dimensions (x, y, z, c), where c represents a color channel")\n- Pandas dataframes should have their column names listed.\n\nTry to adjust your docstring to meet this requirement.'
+      });
+    } else if (validationAnswers.outputs === 'UNSURE') {
+      feedback.push({
+        type: 'warning',
+        title: 'Consider Improving Your Function Description',
+        message: 'A complete docstring should list every output it returns and its expected datatype(s). In the case of more complex data structures, it should also describe the nature of their contents. For example:\n\n- Dictionaries should have their keys listed and their corresponding values described.\n- Numpy arrays with consistent dimensions should have those dimensions listed and explained (e.g. instead of "Numpy array", consider "Numpy array of dimensions (x, y, z, c), where c represents a color channel")\n- Pandas dataframes should have their column names listed.\n\nDoes your docstring meet this requirement?'
+      });
+    }
+
+    if (validationAnswers.example === 'NO') {
+      feedback.push({
+        type: 'error',
+        title: 'Your docstring needs some work.',
+        message: 'This is not as strict of a requirement, but can prove valuable down the line should the script be run through any pipelines that automatically generate documentation, as is the case with some tools (e.g. sphinx). You don\'t need to overthink this part, it can be as simple as the following example:\n\n```python\nUsage:\n    function_name(arg1, arg2, arg3)\n```\n\nTry to adjust your docstring to meet this requirement.'
+      });
+    } else if (validationAnswers.example === 'UNSURE') {
+      feedback.push({
+        type: 'warning',
+        title: 'Consider Improving Your Function Description',
+        message: 'This is not as strict of a requirement, but can prove valuable down the line should the script be run through any pipelines that automatically generate documentation, as is the case with some tools (e.g. sphinx). You don\'t need to overthink this part, it can be as simple as the following example:\n\n```python\nUsage:\n    function_name(arg1, arg2, arg3)\n```\n\nDoes your docstring meet this requirement?'
+      });
+    }
+
+    return feedback;
+  };
+
+  const specificFeedback = getSpecificFeedback();
 
   const validationQuestions = [
     {
       key: 'describes',
-      text: 'Does your docstring describe what the function does?'
+      text: 'Does your docstring offer a comprehensive description the function?'
     },
     {
       key: 'inputs',
-      text: `Does your docstring clearly explain ${selectedFunction.name}'s inputs?`
+      text: `Does your docstring clearly explain the inputs of ${selectedFunction.name}() and their expected properties?`
     },
     {
       key: 'outputs',
-      text: `Does your docstring clearly explain ${selectedFunction.name}'s outputs?`
+      text: `Does your docstring clearly explain the outputs of ${selectedFunction.name}() and their expected properties?`
     },
     {
       key: 'example',
-      text: 'Does your docstring provide an example of how to call this function?'
+      text: 'Does your docstring include an example of how to call this function?'
     }
   ];
 
@@ -1364,7 +1493,7 @@ Utility functions for basic preprocessing of microscopy data.
                   disabled={showValidation}
                   style={{
                     width: '100%',
-                    minHeight: '60px',
+                    minHeight: '200px',
                     padding: '8px 12px',
                     fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
                     fontSize: '14px',
@@ -1528,7 +1657,7 @@ Utility functions for basic preprocessing of microscopy data.
               {/* Table Header */}
               <Box sx={{ 
                 display: 'grid', 
-                gridTemplateColumns: '1fr 100px 100px', 
+                gridTemplateColumns: '1fr 100px 100px 120px', 
                 gap: 3, 
                 alignItems: 'center',
                 pb: 2,
@@ -1544,13 +1673,16 @@ Utility functions for basic preprocessing of microscopy data.
                 <Typography variant="body1" sx={{ fontWeight: 600, color: '#1f2937', textAlign: 'center' }}>
                   No
                 </Typography>
+                <Typography variant="body1" sx={{ fontWeight: 600, color: '#1f2937', textAlign: 'center' }}>
+                  I&apos;m not sure
+                </Typography>
               </Box>
 
               {/* Table Rows */}
               {validationQuestions.map((question, index) => (
                 <Box key={question.key} sx={{ 
                   display: 'grid', 
-                  gridTemplateColumns: '1fr 100px 100px', 
+                  gridTemplateColumns: '1fr 100px 100px 120px', 
                   gap: 3, 
                   alignItems: 'center',
                   py: 2,
@@ -1609,11 +1741,36 @@ Utility functions for basic preprocessing of microscopy data.
                       )}
                     </Box>
                   </Box>
+
+                  {/* I'm not sure Radio Button */}
+                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                    <Box
+                      onClick={() => handleValidationAnswer(question.key, 'UNSURE')}
+                      sx={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: '50%',
+                        border: '2px solid #000000',
+                        backgroundColor: validationAnswers[question.key] === 'UNSURE' ? '#000000' : 'transparent',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        '&:hover': {
+                          backgroundColor: validationAnswers[question.key] === 'UNSURE' ? '#1f2937' : 'rgba(0, 0, 0, 0.05)'
+                        }
+                      }}
+                    >
+                      {validationAnswers[question.key] === 'UNSURE' && (
+                        <Box sx={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: 'white' }} />
+                      )}
+                    </Box>
+                  </Box>
                 </Box>
               ))}
               
               {/* Info Message for Unanswered Questions */}
-              {hasUnansweredQuestions && !hasNoAnswers && (
+              {hasUnansweredQuestions && specificFeedback.length === 0 && (
                 <Box sx={{ 
                   mt: 3, 
                   p: 3, 
@@ -1634,45 +1791,49 @@ Utility functions for basic preprocessing of microscopy data.
                         Please answer all questions
                       </Typography>
                       <Typography variant="body2" sx={{ color: '#1e3a8a', lineHeight: 1.5 }}>
-                        Review each question and select &quot;Yes&quot; or &quot;No&quot; based on your docstring content.
+                        Review each question and select &quot;Yes&quot;, &quot;No&quot;, or &quot;I&apos;m not sure&quot; based on your docstring content.
                       </Typography>
                     </Box>
                   </Box>
                 </Box>
               )}
 
-              {/* Warning Message for No Answers */}
-              {hasNoAnswers && (
-                <Box sx={{ 
+              {/* Specific Feedback Messages */}
+              {specificFeedback.map((feedback, index) => (
+                <Box key={index} sx={{ 
                   mt: 3, 
                   p: 3, 
-                  backgroundColor: '#fef2f2', 
-                  borderLeft: '4px solid #ef4444',
+                  backgroundColor: feedback.type === 'error' ? '#fef2f2' : '#fffbeb', 
+                  borderLeft: `4px solid ${feedback.type === 'error' ? '#ef4444' : '#f59e0b'}`,
                   borderRadius: '0 8px 8px 0'
                 }}>
                   <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
                     <Box sx={{ 
                       fontSize: '1.25rem',
-                      color: '#dc2626',
+                      color: feedback.type === 'error' ? '#dc2626' : '#d97706',
                       lineHeight: 1
                     }}>
-                      ⚠️
+                      {feedback.type === 'error' ? '❌' : '⚠️'}
                     </Box>
                     <Box sx={{ flex: 1 }}>
-                      <Typography variant="body1" sx={{ fontWeight: 600, color: '#dc2626', mb: 1 }}>
-                        Docstring needs improvement
+                      <Typography variant="body1" sx={{ 
+                        fontWeight: 600, 
+                        color: feedback.type === 'error' ? '#dc2626' : '#d97706', 
+                        mb: 1 
+                      }}>
+                        {feedback.title}
                       </Typography>
-                      <Typography variant="body2" sx={{ color: '#991b1b', lineHeight: 1.5, mb: 2 }}>
-                        You&quot;ve answered &quot;No&quot; to one or more questions. A good docstring should address all aspects of the function. 
-                        Please edit your docstring to include the missing information.
-                      </Typography>
-                      <Typography variant="body2" sx={{ color: '#7f1d1d', fontSize: '0.875rem', fontStyle: 'italic' }}>
-                        💡 Tip: Use the help templates for guidance on writing comprehensive docstrings.
+                      <Typography variant="body2" sx={{ 
+                        color: feedback.type === 'error' ? '#991b1b' : '#92400e', 
+                        lineHeight: 1.5,
+                        whiteSpace: 'pre-line'
+                      }}>
+                        {feedback.message}
                       </Typography>
                     </Box>
                   </Box>
                 </Box>
-              )}
+              ))}
 
               {/* Success Message for All Yes */}
               {allAnswersYes && !hasUnansweredQuestions && (
@@ -1699,8 +1860,8 @@ Utility functions for basic preprocessing of microscopy data.
               )}
 
               <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, mt: 4 }}>
-                {/* Edit Docstring Button - shown when there are No answers */}
-                {hasNoAnswers && (
+                {/* Edit Docstring Button - shown when there is specific feedback */}
+                {specificFeedback.length > 0 && (
                   <Button 
                     variant="outlined"
                     onClick={handleEditDocstring}
@@ -1736,7 +1897,7 @@ Utility functions for basic preprocessing of microscopy data.
                     py: 1.5,
                     fontSize: '0.875rem',
                     fontWeight: 500,
-                    marginLeft: hasNoAnswers ? 0 : 'auto'
+                    marginLeft: specificFeedback.length > 0 ? 0 : 'auto'
                   }}
                 >
                   {hasUnansweredQuestions 
@@ -1828,20 +1989,43 @@ Utility functions for basic preprocessing of microscopy data.
                     const isSelected = selectedLinesForCommenting.has(lineNumber);
                     
                     return (
-                      <Box 
-                        key={`line-${index}`} 
-                        sx={{ 
-                          display: 'flex', 
-                          minHeight: '21px', 
-                          alignItems: 'center', 
-                          px: 2,
-                          position: 'relative',
-                          cursor: isClickableLine ? 'pointer' : 'default',
-                          '&:hover': isClickableLine ? {
-                            backgroundColor: 'rgba(255, 192, 203, 0.2)' // Light pink hover
-                          } : {}
-                        }}
-                        onClick={() => {
+                      <React.Fragment key={`line-${index}`}>
+                        {/* Pink #new comment line above selected lines */}
+                        {isSelected && (
+                          <Box sx={{ 
+                            display: 'flex', 
+                            minHeight: '21px', 
+                            alignItems: 'center', 
+                            px: 2,
+                            backgroundColor: 'rgba(255, 192, 203, 0.3)', // Light pink background
+                            borderLeft: '3px solid #ec4899' // Pink border
+                          }}>
+                            <LineNumber sx={{ color: '#9ca3af' }}>{String(lineNumber).padStart(2, '0')}</LineNumber>
+                            <Typography sx={{ 
+                              fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+                              fontSize: '14px',
+                              color: '#ec4899', // Pink text
+                              ml: 2,
+                              fontStyle: 'italic'
+                            }}>
+                              # new comment
+                            </Typography>
+                          </Box>
+                        )}
+                        
+                        <Box 
+                          sx={{ 
+                            display: 'flex', 
+                            minHeight: '21px', 
+                            alignItems: 'center', 
+                            px: 2,
+                            position: 'relative',
+                            cursor: isClickableLine ? 'pointer' : 'default',
+                            '&:hover': isClickableLine ? {
+                              backgroundColor: 'rgba(255, 192, 203, 0.2)' // Light pink hover
+                            } : {}
+                          }}
+                          onClick={() => {
                           if (isClickableLine) {
                             const newSelected = new Set(selectedLinesForCommenting);
                             const newCommentLineContent = new Map(commentLineContent);
@@ -1884,7 +2068,8 @@ Utility functions for basic preprocessing of microscopy data.
                         }}>
                           {line}
                         </Typography>
-                      </Box>
+                        </Box>
+                      </React.Fragment>
                     );
                   })}
                 </CodeContainer>
@@ -2436,18 +2621,10 @@ Utility functions for basic preprocessing of microscopy data.
                   {(() => {
                     // Create example solution based on the selected function
                     const getExampleSolution = (functionName, originalCode) => {
-                      // Check if we need to add a module docstring based on selectedFile
-                      let moduleDocstring = '';
-                      if (selectedFile === 'plotting' && plotting.docstring) {
-                        moduleDocstring = plotting.docstring + '\n';
-                      } else if (selectedFile === 'preprocessing' && preprocessing.docstring) {
-                        moduleDocstring = preprocessing.docstring + '\n';
-                      } else if (selectedFile === 'loading' && loading.docstring) {
-                        moduleDocstring = loading.docstring + '\n';
-                      }
+                      // Remove module docstring and imports from example solutions
                       
                       if (functionName === 'load_file') {
-                        return moduleDocstring + `def load_file(path):
+                        return `def load_file(path):
     """
     Load microscopy data from various file formats and return preprocessing parameters.
     
@@ -2516,13 +2693,7 @@ Utility functions for basic preprocessing of microscopy data.
     # Return both data and parameters
     return microscopy_data, image_parameters`;
                       } else if (functionName === 'load_tif') {
-                        return moduleDocstring + `from nd2reader import ND2Reader
-from tifffile import imread
-from pynwb import NWBHDF5IO
-import numpy as np
-
-
-def load_tif(file_path):
+                        return `def load_tif(file_path):
     """Return image/stack data from a TIFF/OME-TIFF file generated by the fiji image processing data.
 
     Parameters
@@ -2539,13 +2710,7 @@ def load_tif(file_path):
     microscopy_volume = imread(file_path)
     return microscopy_volume`;
                       } else if (functionName === 'load_nd2') {
-                        return moduleDocstring + `from nd2reader import ND2Reader
-from tifffile import imread
-from pynwb import NWBHDF5IO
-import numpy as np
-
-
-def load_nd2(file_path):
+                        return `def load_nd2(file_path):
     """Return image/stack data from a Nikon ND2 file.
 
     Notes
@@ -2573,13 +2738,7 @@ def load_nd2(file_path):
 
     return microscopy_volume`;
                       } else if (functionName === 'load_nwb') {
-                        return moduleDocstring + `from nd2reader import ND2Reader
-from tifffile import imread
-from pynwb import NWBHDF5IO
-import numpy as np
-
-
-def load_nwb(file_path):
+                        return `def load_nwb(file_path):
     """Return image/stack data from an NWB file.
 
     Assumptions
@@ -2636,13 +2795,7 @@ def load_nwb(file_path):
 
     return microscopy_volume`;
                       } else if (functionName === 'load_parameters') {
-                        return moduleDocstring + `from nd2reader import ND2Reader
-from tifffile import imread
-from pynwb import NWBHDF5IO
-import numpy as np
-
-
-def load_parameters(file_format):
+                        return `def load_parameters(file_format):
     """Return preprocessing parameter flags for a given file format.
 
     The values indicate which preprocessing steps are already satisfied
@@ -2698,10 +2851,7 @@ def load_parameters(file_format):
 
     return is_normalized, is_mip, is_cropped, zoom_level, gaussian_sigma`;
                       } else if (functionName === 'generate_comparison_plot') {
-                        return moduleDocstring + `import matplotlib.pyplot as plt
-
-
-def generate_comparison_plot(generated_images, output_path):
+                        return `def generate_comparison_plot(generated_images, output_path):
     """Save a horizontal figure showing each intermediate processing step.
 
     Parameters
@@ -2728,10 +2878,7 @@ def generate_comparison_plot(generated_images, output_path):
 
     plt.savefig(output_path)`;
                       } else if (functionName === 'plot_single_file') {
-                        return moduleDocstring + `import matplotlib.pyplot as plt
-
-
-def plot_single_file(image):
+                        return `def plot_single_file(image):
     """Display a single image (no file is saved).
 
     Parameters
@@ -2742,10 +2889,7 @@ def plot_single_file(image):
 
     plt.imshow(image)`;
                       } else if (functionName === 'plot_multiple_files') {
-                        return moduleDocstring + `import matplotlib.pyplot as plt
-
-
-def plot_multiple_files(filenames, images, output_path=None):
+                        return `def plot_multiple_files(filenames, images, output_path=None):
     """Show (and optionally save) a row of final images, one per file.
 
     Parameters
@@ -2773,10 +2917,7 @@ def plot_multiple_files(filenames, images, output_path=None):
 
     plt.show()`;
                       } else if (functionName === 'maximally_project_image') {
-                        return moduleDocstring + `import numpy as np
-from scipy.ndimage import zoom, gaussian_filter
-
-def maximally_project_image(image):
+                        return `def maximally_project_image(image):
     """Return a maximum intensity projection of a given image.
     
     A maximum intensity projection (MIP) is a visualization method that projects
@@ -2831,9 +2972,7 @@ def maximally_project_image(image):
     
     return maximum_intensity_projection`;
                       } else if (functionName === 'normalize_image') {
-                        return moduleDocstring + `import numpy as np
-
-def normalize_image(image):
+                        return `def normalize_image(image):
     """Scale *image* so its pixel values lie between 0 and 1.
 
     This uses simple min‑max normalisation: subtract the global minimum
@@ -2860,9 +2999,7 @@ def normalize_image(image):
 
     return normalized_image`;
                       } else if (functionName === 'crop_background_border') {
-                        return moduleDocstring + `import numpy as np
-
-def crop_background_border(image, background_percentile):
+                        return `def crop_background_border(image, background_percentile):
     """Crop away uniform background borders.
 
     Any pixel value at or below the given background_percentile is
@@ -2901,10 +3038,7 @@ def crop_background_border(image, background_percentile):
 
     return image`;
                       } else if (functionName === 'downsample_image') {
-                        return moduleDocstring + `import numpy as np
-from scipy.ndimage import zoom
-
-def downsample_image(image, factor):
+                        return `def downsample_image(image, factor):
     """Resize a given image by  a given factor using cubic spline interpolation.
 
     Parameters
@@ -2925,10 +3059,7 @@ def downsample_image(image, factor):
 
     return image`;
                       } else if (functionName === 'smooth_image') {
-                        return moduleDocstring + `import numpy as np
-from scipy.ndimage import gaussian_filter
-
-def smooth_image(image, factor):
+                        return `def smooth_image(image, factor):
     """Blur a given image with a Gaussian kernel.
 
     Parameters
@@ -2998,7 +3129,7 @@ def smooth_image(image, factor):
                           }
                         });
                         
-                        return moduleDocstring + functionLine + '\n' + docstring + '\n' + documentedBodyLines.join('\n');
+                        return functionLine + '\n' + docstring + '\n' + documentedBodyLines.join('\n');
                       }
                     };
                     
@@ -3256,6 +3387,7 @@ def smooth_image(image, factor):
               const useLoadingOptions = selectedFile === 'loading' && loading[hoveredLineContent];
               const usePlottingOptions = selectedFile === 'plotting' && plotting[hoveredLineContent];
               const usePreprocessingOptions = selectedFile === 'preprocessing' && preprocessing[hoveredLineContent];
+              const useMainOptions = selectedFile === 'main' && main[hoveredLineContent];
               
               let commentOptions;
               if (useLoadingOptions) {
@@ -3264,6 +3396,8 @@ def smooth_image(image, factor):
                 commentOptions = plotting[hoveredLineContent];
               } else if (usePreprocessingOptions) {
                 commentOptions = preprocessing[hoveredLineContent];
+              } else if (useMainOptions) {
+                commentOptions = main[hoveredLineContent];
               } else {
                 commentOptions = ['# Initialize preprocessing_parameters dictionary.', '# Define variable.'];
               }
@@ -3440,13 +3574,7 @@ export default function ActivityDashboard() {
     const fileContents = {
       'main.py': pythonCode,
       
-      'loading.py': `from nd2reader import ND2Reader
-from tifffile import imread
-from pynwb import NWBHDF5IO
-import numpy as np
-
-
-def load_tif(file_path):
+      'loading.py': `def load_tif(file_path):
     microscopy_volume = imread(file_path)
     return microscopy_volume
 
@@ -3503,21 +3631,11 @@ def load_parameters(file_format):
             
     return is_normalized, is_mip, is_cropped, zoom_level, gaussian_sigma`,
       
-      'plotting.py': `import matplotlib.pyplot as plt
-
-
-def generate_comparison_plot(generated_images, output_path):
-    # Updated plotting functions
-   
+      'plotting.py': `def generate_comparison_plot(generated_images, output_path):
     num_images = len(generated_images)
-
- 
     fig, axes = plt.subplots(1, num_images, figsize=(4 * num_images, 3))
 
-    
     current_axes = 0
-
-  
     for label, image in generated_images.items():
         axes[current_axes].imshow(image)
         axes[current_axes].set_title(label)
@@ -3548,10 +3666,7 @@ def plot_multiple_files(filenames, images, output_path=None):
 
     plt.show()`,
         
-      'preprocessing.py': `import numpy as np
-from scipy.ndimage import zoom, gaussian_filter
-
-def maximally_project_image(image):
+      'preprocessing.py': `def maximally_project_image(image):
     dimensions = np.array(image.shape)
     if len(dimensions) < 4:
         z_index = np.argmin(dimensions)
@@ -3775,7 +3890,7 @@ Data Sources:
           </Box>
         )}
 
-        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
           {/* <Button 
             variant="contained" 
             sx={{ 

@@ -1,28 +1,28 @@
-import * as React from 'react'
-import { useEffect } from 'react'
-import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
-import Typography from '@mui/material/Typography'
-import Modal from '@mui/material/Modal'
+import * as React from "react";
+import { useEffect } from "react";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Typography from "@mui/material/Typography";
+import Modal from "@mui/material/Modal";
 
 const style = {
-  position: 'absolute',
-  top: '50%',
-  left: '50%',
-  transform: 'translate(-50%, -50%)',
+  position: "absolute",
+  top: "50%",
+  left: "50%",
+  transform: "translate(-50%, -50%)",
   width: 350,
-  minWidth: 'fit-content',
-  maxHeight: '70vh',
-  bgcolor: '#6e00ff', // Changed background color to purple
+  minWidth: "fit-content",
+  maxHeight: "70vh",
+  bgcolor: "#6e00ff", // Changed background color to purple
   // border: '2px solid #000',
-  border: 'none',
-  borderRadius: '4px',
+  border: "none",
+  borderRadius: "4px",
   boxShadow: 24,
   p: 4,
-  color: 'white', // Changed text color to white for better contrast
+  color: "white", // Changed text color to white for better contrast
   outline: 0,
-  overflow: 'auto',
-}
+  overflow: "auto",
+};
 
 export default function CustomModal({ isOpen, closeModal, hypothesis }) {
   return (
@@ -38,18 +38,18 @@ export default function CustomModal({ isOpen, closeModal, hypothesis }) {
           <Button
             onClick={closeModal}
             sx={{
-              position: 'absolute',
+              position: "absolute",
               top: 8,
               right: 8,
-              color: 'white', // Changed button text color to purple
+              color: "white", // Changed button text color to purple
               // backgroundColor: 'white', // Changed button background to white
-              minWidth: 'auto',
+              minWidth: "auto",
               // width: 'fit-content',
-              padding: '4px 12px',
-              borderRadius: '50%',
-              '&:hover': {
-                backgroundColor: 'lightgray', // Optional: change hover color for better visibility
-                color: 'black',
+              padding: "4px 12px",
+              borderRadius: "50%",
+              "&:hover": {
+                backgroundColor: "lightgray", // Optional: change hover color for better visibility
+                color: "black",
               },
             }}
           >
@@ -61,7 +61,7 @@ export default function CustomModal({ isOpen, closeModal, hypothesis }) {
             component="h2"
             sx={{ mb: 2 }}
           >
-            Codebase Organization
+            Comments Activity Instructions
           </Typography>
 
           <Typography
@@ -70,29 +70,33 @@ export default function CustomModal({ isOpen, closeModal, hypothesis }) {
             component="h3"
             sx={{ mb: 2 }}
           >
-            <ul style={{ paddingLeft: '20px', lineHeight: '1.6' }}>
-              <li style={{ marginBottom: '12px' }}>
-                Remember the distinction between source and script: one is the &quot;lower&quot; code that accomplishes the details of computation, the other is the &quot;higher&quot; code that arranges the broader workflow. In this project, what&apos;s your source and what&apos;s your script?
+            You&apos;ll be provided with a programming project and tasked with
+            adding comments & docstrings. This happens via the following steps:
+            <ul style={{ paddingLeft: "20px", lineHeight: "1.6" }}>
+              <li style={{ marginBottom: "12px" }}>
+                Select a function somewhere in the programming project.
               </li>
-              <li style={{ marginBottom: '12px' }}>
-                Try to avoid overly nested directory structure unless absolutely necessary. Remember that the more nested your directory is, the more sub-indexing your script will need to do to access different paths.
+              <li style={{ marginBottom: "12px" }}>
+                Write a docstring for this function, or select and fill in a
+                template docstring.{" "}
               </li>
-              <li style={{ marginBottom: '12px' }}>
-                Which files do you think need to be at the very top level of your project directory?
+              <li style={{ marginBottom: "12px" }}>
+                Answer some questions which ensure that the docstring
+                accomplishes a number of goals.
               </li>
-              <li style={{ marginBottom: '12px' }}>
-                The place your file lives contextualizes its function. For example, a license file in the top level of the project directory will be assumed to describe the license for the entire project, but the license file in a folder that contains data could be interpreted to describe the license of just that data.
+              <li style={{ marginBottom: "12px" }}>
+                Select places to put in-line comments within that function.
               </li>
-              <li style={{ marginBottom: '12px' }}>
-                Think about the audience that is likely to look at your project directory. For this kind of script, that&apos;s probably going to be you or someone else in your lab who is interested in viewing microscopy images and their preprocessing parameters.
-              </li>
-              <li style={{ marginBottom: '12px' }}>
-                Consider the uses that each type of file in your project directory might have. It&apos;s a good idea to structure your directory such that you have one folder for each such component that a user or developer might need.
+              <li style={{ marginBottom: "12px" }}>
+                Select from one of two possible comments for each selected
+                place, or compose your own.
               </li>
             </ul>
+            Once you&apos;re done commenting on the function, you&apos;ll be
+            shown an example solution we prepared.
           </Typography>
         </Box>
       </Modal>
     </div>
-  )
+  );
 }
